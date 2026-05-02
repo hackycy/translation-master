@@ -53,7 +53,7 @@ export class TranslatorEventEmitter {
         listener(data)
       }
       catch (err) {
-        console.error(`[translator] Error in ${event} listener:`, err)
+        console.error(`[translation-master] Error in ${event} listener:`, err)
       }
     })
   }

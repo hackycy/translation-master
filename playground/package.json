@@ -6,7 +6,7 @@
     "dev": "vite"
   },
   "devDependencies": {
-    "translator": "workspace:^",
+    "translation-master": "workspace:^",
     "vite": "catalog:cli",
     "vite-plugin-inspect": "^11.1.0",
     "vite-plugin-translate": "workspace:^"

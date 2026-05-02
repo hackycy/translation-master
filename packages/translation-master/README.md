@@ -1,4 +1,4 @@
-# translator
+# translation-master
 
 [![npm version][npm-version-src]][npm-version-href]
 [![npm downloads][npm-downloads-src]][npm-downloads-href]
@@ -8,13 +8,13 @@ Pure frontend WASM translation library powered by [Transformers.js](https://gith
 ## Install
 
 ```bash
-pnpm add translator
+pnpm add translation-master
 ```
 
 ## Quick Start
 
 ```ts
-import { Translator } from 'translator'
+import { Translator } from 'translation-master'
 
 const translator = new Translator()
 
@@ -27,7 +27,7 @@ That's it. The model downloads automatically on first use, with a built-in toast
 ## Usage
 
 ```ts
-import { Translator } from 'translator'
+import { Translator } from 'translation-master'
 
 // Zero-config: device defaults to WASM, toast UI enabled, auto language detection
 const translator = new Translator()
@@ -98,7 +98,7 @@ By default, `translate()` returns `{ text, from, to }` plus `model`, `duration`,
 A built-in worker entry is provided for offloading translations to a background thread:
 
 ```ts
-const worker = new Worker(new URL('translator/worker', import.meta.url), { type: 'module' })
+const worker = new Worker(new URL('translation-master/worker', import.meta.url), { type: 'module' })
 
 worker.postMessage({
   type: 'translate',
@@ -137,7 +137,7 @@ Dark mode is auto-detected from `[data-theme="dark"]`, `.dark` class, or `prefer
 
 <!-- Badges -->
 
-[npm-version-src]: https://img.shields.io/npm/v/translator?style=flat&colorA=080f12&colorB=1fa669
-[npm-version-href]: https://npmjs.com/package/translator
-[npm-downloads-src]: https://img.shields.io/npm/dm/translator?style=flat&colorA=080f12&colorB=1fa669
-[npm-downloads-href]: https://npmjs.com/package/translator
+[npm-version-src]: https://img.shields.io/npm/v/translation-master?style=flat&colorA=080f12&colorB=1fa669
+[npm-version-href]: https://npmjs.com/package/translation-master
+[npm-downloads-src]: https://img.shields.io/npm/dm/translation-master?style=flat&colorA=080f12&colorB=1fa669
+[npm-downloads-href]: https://npmjs.com/package/translation-master

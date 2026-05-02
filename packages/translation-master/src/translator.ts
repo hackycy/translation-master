@@ -26,7 +26,7 @@ export class Translator {
   constructor(options?: TranslatorOptions) {
     if (isSSR()) {
       throw new Error(
-        '[translator] SSR environment detected. Translator requires a browser environment with WebGPU/WASM support. '
+        '[translation-master] SSR environment detected. Translator requires a browser environment with WebGPU/WASM support. '
         + 'If you are using Next.js/Nuxt, ensure Translator is only instantiated on the client side.',
       )
     }

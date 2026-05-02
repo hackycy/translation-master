@@ -1,4 +1,4 @@
-# translator 技术架构文档
+# translation-master 技术架构文档
 
 > 基于 Transformers.js 的纯前端 WASM 翻译库技术方案
 
@@ -104,7 +104,7 @@ const LANG_TO_FLORES: Record<string, string> = {
 ### 3.1 模块结构
 
 ```
-packages/translator/
+packages/translation-master/
 ├── src/
 │   ├── index.ts              # 入口，导出公共 API
 │   ├── translator.ts         # 核心翻译器类
@@ -775,31 +775,31 @@ self.onmessage = async (e) => {
 
 ### 10.1 集成方式
 
-`translator` 包作为独立的翻译引擎，`vite-plugin-translate` 可选择使用它：
+`translation-master` 包作为独立的翻译引擎，`vite-plugin-translate` 可选择使用它：
 
 ```typescript
 // vite-plugin-translate 的新配置项
 interface PluginOptions {
   // ...现有配置
-  engine?: 'translate.js' | 'translator'  // 翻译引擎选择
-  translatorOptions?: TranslatorOptions   // translator 引擎配置
+  engine?: 'translate.js' | 'translation-master'  // 翻译引擎选择
+  translatorOptions?: TranslatorOptions   // translation-master 引擎配置
 }
 ```
 
 ### 10.2 渐进迁移路径
 
 ```
-Phase 1: translator 作为独立包发布
-    → 用户可直接 import { Translator } from 'translator'
+Phase 1: translation-master 作为独立包发布
+    → 用户可直接 import { Translator } from 'translation-master'
     → 与 vite-plugin-translate 无耦合
 
 Phase 2: vite-plugin-translate 增加 engine 选项
     → engine: 'translate.js' (默认，现有行为)
-    → engine: 'translator' (新 WASM 引擎)
+    → engine: 'translation-master' (新 WASM 引擎)
 
 Phase 3: 统一 API 抽象
     → 定义通用 TranslateEngine 接口
-    → translate.js 和 translator 均实现该接口
+    → translate.js 和 translation-master 均实现该接口
 ```
 
 ---
@@ -810,7 +810,7 @@ Phase 3: 统一 API 抽象
 
 ```json
 {
-  "name": "translator",
+  "name": "translation-master",
   "version": "0.0.1",
   "description": "Pure frontend WASM translation library powered by Transformers.js",
   "type": "module",
@@ -886,7 +886,7 @@ export {
 **使用示例：**
 
 ```typescript
-import { Translator } from 'translator'
+import { Translator } from 'translation-master'
 
 const translator = new Translator({
   device: 'auto',

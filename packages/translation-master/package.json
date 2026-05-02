@@ -1,5 +1,5 @@
 {
-  "name": "translator",
+  "name": "translation-master",
   "type": "module",
   "version": "0.0.1",
   "description": "Pure frontend WASM translation library powered by Transformers.js",

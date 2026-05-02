@@ -1,4 +1,4 @@
-import { Translator } from 'translator'
+import { Translator } from 'translation-master'
 
 // --- DOM refs ---
 const langFrom = document.getElementById('lang-from') as HTMLSelectElement

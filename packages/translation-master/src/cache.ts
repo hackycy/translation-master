@@ -1,6 +1,6 @@
 import type { CacheAdapter } from './types'
 
-const CACHE_VERSION_KEY = 'translator:cache-version'
+const CACHE_VERSION_KEY = 'translation-master:cache-version'
 
 /**
  * Default CacheAdapter using the browser Cache API.

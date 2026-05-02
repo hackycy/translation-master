@@ -117,7 +117,7 @@ importers:
         specifier: catalog:testing
         version: 2.8.1
 
-  packages/translator:
+  packages/translation-master:
     dependencies:
       '@huggingface/transformers':
         specifier: ^3.8.0
@@ -131,9 +131,9 @@ importers:
 
   playground:
     devDependencies:
-      translator:
+      translation-master:
         specifier: workspace:^
-        version: link:../packages/translator
+        version: link:../packages/translation-master
       vite:
         specifier: catalog:cli
         version: 7.2.1(@types/node@24.10.0)(jiti@2.6.0)(lightningcss@1.32.0)(tsx@4.20.6)(yaml@2.8.1)
