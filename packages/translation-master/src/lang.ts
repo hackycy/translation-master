@@ -52,10 +52,16 @@ export const LANG_TO_FLORES: Record<string, string> = {
   'sw': 'swh_Latn',
 }
 
-/** FLORES-200 code → user-friendly code (reverse mapping) */
-const FLORES_TO_LANG: Record<string, string> = Object.fromEntries(
-  Object.entries(LANG_TO_FLORES).map(([k, v]) => [v, k]),
-)
+/** FLORES-200 code → user-friendly code (reverse mapping, first-entry wins) */
+const FLORES_TO_LANG: Record<string, string> = (() => {
+  const map: Record<string, string> = {}
+  for (const [k, v] of Object.entries(LANG_TO_FLORES)) {
+    if (!(v in map)) {
+      map[v] = k
+    }
+  }
+  return map
+})()
 
 /** Supported languages list */
 const SUPPORTED_LANGUAGES: LanguageInfo[] = [
@@ -223,7 +229,6 @@ export function detectLanguage(text: string): { lang: string, confidence: number
     // Check Hiragana/Katakana (definitive Japanese marker)
     if ((code >= 0x3040 && code <= 0x309F) || (code >= 0x30A0 && code <= 0x30FF)) {
       counts.ja = (counts.ja || 0) + 1
-      totalChars++
       continue
     }
 

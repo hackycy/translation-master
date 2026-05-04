@@ -2,8 +2,12 @@ export type DeviceType = 'wasm' | 'webgpu'
 
 /**
  * Check if running in a server-side rendering (SSR) environment.
+ * Returns false for Web Workers (which have no window/document but are valid runtime environments).
  */
 export function isSSR(): boolean {
+  if (typeof globalThis !== 'undefined' && typeof (globalThis as any).WorkerGlobalScope !== 'undefined') {
+    return false // Web Worker — not SSR
+  }
   return typeof window === 'undefined' || typeof document === 'undefined'
 }
 

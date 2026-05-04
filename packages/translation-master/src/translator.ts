@@ -1,6 +1,8 @@
+import type { DOMTranslatorOptions } from './dom-types'
+import type { PipelineInstance } from './model-pool'
 import type { ModelLoadProgress, ResolvedModel, TranslateOptions, TranslateResult, TranslateResultMinimal, TranslatorOptions } from './types'
 import { TranslationResultCache } from './cache'
-import { isSSR, resolveDevice } from './env'
+import { isSSR, isWorker, isWorkerSupported, resolveDevice } from './env'
 import { TranslatorEventEmitter } from './event-emitter'
 import { detectLanguage, getSupportedLanguages, normalizeLang } from './lang'
 import { ModelPool } from './model-pool'
@@ -23,6 +25,14 @@ export class Translator {
   /** Built-in toast UI */
   private toastUI: ToastUI | null = null
 
+  /** DOM translator instance (lazy) */
+  private _domTranslator: import('./dom-translator').DOMTranslator | null = null
+
+  /** Web Worker translator for off-main-thread inference (lazy) */
+  private _workerTranslator: import('./worker-translator').WorkerTranslator | null = null
+  private _useWorker: boolean
+  private _workerUrl?: URL | string
+
   constructor(options?: TranslatorOptions) {
     if (isSSR()) {
       throw new Error(
@@ -40,6 +50,12 @@ export class Translator {
     this.debug = options?.debug ?? false
     this.events = new TranslatorEventEmitter()
 
+    // Determine whether to use Web Worker for inference
+    const useWorkerOpt = options?.useWorker ?? 'auto'
+    this._useWorker = useWorkerOpt === true
+      || (useWorkerOpt === 'auto' && isWorkerSupported() && !isWorker())
+    this._workerUrl = options?.workerUrl
+
     // Toast UI (enabled by default)
     const uiEnabled = options?.ui !== false
     this.toastUI = new ToastUI(this.events, uiEnabled)
@@ -51,9 +67,56 @@ export class Translator {
   }
 
   /**
+   * Lazily initialize the worker translator.
+   * Returns null if worker mode is disabled.
+   */
+  private async getWorkerTranslator(): Promise<import('./worker-translator').WorkerTranslator | null> {
+    if (!this._useWorker)
+      return null
+
+    if (!this._workerTranslator) {
+      try {
+        const { WorkerTranslator } = await import('./worker-translator')
+        this._workerTranslator = new WorkerTranslator({
+          device: this.device,
+          dtype: this.dtype,
+          models: this.router.getConfigs(),
+          autoDetect: this.autoDetect,
+          workerUrl: this._workerUrl,
+        })
+        // Forward events from worker to main event emitter
+        this._workerTranslator.events.on('modelLoad', e => this.events.emit('modelLoad', e))
+        this._workerTranslator.events.on('translate', e => this.events.emit('translate', e))
+        this._workerTranslator.events.on('error', e => this.events.emit('error', e))
+      }
+      catch {
+        // Worker unavailable (e.g., bundled file not found during dev) — fall back to main thread
+        this._useWorker = false
+        return null
+      }
+    }
+
+    return this._workerTranslator
+  }
+
+  /**
    * Translate text from source language to target language.
    */
   async translate(text: string, options: TranslateOptions): Promise<TranslateResult & TranslateResultMinimal> {
+    // Delegate to worker if available — inference runs off main thread
+    const worker = await this.getWorkerTranslator()
+    if (worker) {
+      try {
+        return await worker.translate(text, options)
+      }
+      catch {
+        // Worker failed (e.g., failed to load) — fall back to main thread
+        this._useWorker = false
+        await worker.dispose().catch(() => {})
+        this._workerTranslator = null
+      }
+    }
+
     const startTime = Date.now()
     const to = normalizeLang(options.to)
 
@@ -77,9 +140,6 @@ export class Translator {
     if (cached) {
       const duration = Date.now() - startTime
       this.events.emit('translate', { text, from, to, result: cached, duration, cached: true })
-      if (this.debug) {
-        return { text: cached, from, to, model: 'cache', duration, confidence, cached: true }
-      }
       return { text: cached, from, to, model: 'cache', duration, confidence, cached: true }
     }
 
@@ -95,9 +155,6 @@ export class Translator {
     const duration = Date.now() - startTime
     this.events.emit('translate', { text, from, to, result: translatedText, duration, model: resolved.modelId })
 
-    if (this.debug) {
-      return { text: translatedText, from, to, model: resolved.modelId, duration, confidence }
-    }
     return { text: translatedText, from, to, model: resolved.modelId, duration, confidence }
   }
 
@@ -108,7 +165,20 @@ export class Translator {
     texts: string[],
     options: TranslateOptions,
   ): Promise<TranslateResult[]> {
-    const startTime = Date.now()
+    // Delegate to worker if available — inference runs off main thread
+    const worker = await this.getWorkerTranslator()
+    if (worker) {
+      try {
+        return await worker.translateBatch(texts, options)
+      }
+      catch {
+        // Worker failed — fall back to main thread
+        this._useWorker = false
+        await worker.dispose().catch(() => {})
+        this._workerTranslator = null
+      }
+    }
+
     const to = normalizeLang(options.to)
 
     let from: string
@@ -133,6 +203,8 @@ export class Translator {
     const pipeOptions = this.buildPipeOptions(resolved)
 
     for (const text of texts) {
+      const itemStart = Date.now()
+
       // Check cache first
       const cached = this.resultCache.get(text, from, to)
       if (cached) {
@@ -141,7 +213,7 @@ export class Translator {
           from,
           to,
           model: resolved.modelId,
-          duration: Date.now() - startTime,
+          duration: Date.now() - itemStart,
           confidence,
           cached: true,
         })
@@ -158,7 +230,7 @@ export class Translator {
         from,
         to,
         model: resolved.modelId,
-        duration: Date.now() - startTime,
+        duration: Date.now() - itemStart,
         confidence,
       })
     }
@@ -177,6 +249,10 @@ export class Translator {
    * Preload the model for a given language pair.
    */
   async preload(from: string, to: string): Promise<void> {
+    const worker = await this.getWorkerTranslator()
+    if (worker) {
+      return worker.preload(from, to)
+    }
     const resolved = this.router.resolve(from, to)
     await this.getPipeline(resolved)
   }
@@ -197,16 +273,93 @@ export class Translator {
   }
 
   /**
-   * Clear translation result cache and model cache (Cache API).
+   * Clear the in-memory translation result cache.
    */
-  async clearCache(): Promise<void> {
+  clearCache(): void {
     this.resultCache.clear()
+  }
+
+  /**
+   * Translate the entire page or a specific DOM element.
+   *
+   * Walks the DOM, collects translatable text, translates it using WASM models,
+   * and writes the translated text back while preserving HTML structure.
+   * Original text is preserved and can be restored with `restorePage()`.
+   *
+   * @param options DOM translation options
+   *
+   * @example
+   * ```ts
+   * const translator = new Translator()
+   * await translator.translatePage({ to: 'en' })
+   * // Later: restore original text
+   * translator.restorePage()
+   * ```
+   */
+  async translatePage(options: DOMTranslatorOptions & { root?: Element }): Promise<void> {
+    const { DOMTranslator } = await import('./dom-translator')
+    if (!this._domTranslator) {
+      this._domTranslator = new DOMTranslator(this)
+    }
+
+    // Wire up progress events to the event emitter
+    const originalOnProgress = options.onProgress
+    const wrappedOptions: typeof options = {
+      ...options,
+      onProgress: (event) => {
+        this.events.emit('domTranslate', {
+          phase: event.phase,
+          translatedGroups: event.translatedGroups ?? 0,
+          totalGroups: event.totalGroups ?? 0,
+          currentBatch: event.currentBatch,
+          totalBatches: event.totalBatches,
+        })
+        originalOnProgress?.(event)
+      },
+    }
+
+    return this._domTranslator.translatePage(wrappedOptions)
+  }
+
+  /**
+   * Restore all DOM content translated by `translatePage()` back to original text.
+   */
+  restorePage(): void {
+    this._domTranslator?.restore()
+  }
+
+  /**
+   * Start observing DOM changes for automatic incremental translation.
+   * Must be called after `translatePage()`.
+   */
+  startDOMObserver(options?: { debounceMs?: number, root?: Element }): void {
+    this._domTranslator?.startObserver(options)
+  }
+
+  /**
+   * Stop the DOM change observer.
+   */
+  stopDOMObserver(): void {
+    this._domTranslator?.stopObserver()
+  }
+
+  /**
+   * Cancel an in-progress DOM translation. Already translated nodes are restored.
+   */
+  cancelPageTranslation(): void {
+    this._domTranslator?.cancel()
   }
 
   /**
    * Dispose all models, clear caches, and remove toast UI.
    */
   async dispose(): Promise<void> {
+    this._domTranslator?.dispose()
+    this._domTranslator = null
+    if (this._workerTranslator) {
+      await this._workerTranslator.dispose()
+      this._workerTranslator = null
+    }
     await this.pool.disposeAll()
     this.resultCache.clear()
     this.toastUI?.destroy()
@@ -224,7 +377,7 @@ export class Translator {
   /**
    * Internal: get or load a pipeline.
    */
-  private async getPipeline(resolved: ResolvedModel): Promise<any> {
+  private async getPipeline(resolved: ResolvedModel): Promise<PipelineInstance> {
     const tf = await this.loadTransformers()
     const device = await resolveDevice(this.device ?? 'wasm')
 
@@ -252,7 +405,7 @@ export class Translator {
       resolved.modelId,
       'translation',
       options,
-      (modelId, _task, opts) => tf.pipeline('translation', modelId, opts) as any,
+      (modelId, _task, opts) => tf.pipeline('translation', modelId, opts) as unknown as Promise<PipelineInstance>,
       progressCallback,
     )
 
@@ -319,12 +472,8 @@ export class Translator {
   /**
    * Extract translated text from pipeline output.
    */
-  private extractText(output: unknown): string {
-    const result = output as Array<{ translation_text?: string }> | { translation_text?: string }
-    if (Array.isArray(result)) {
-      return result[0]?.translation_text ?? ''
-    }
-    return (result as { translation_text?: string }).translation_text ?? ''
+  private extractText(output: Array<{ translation_text: string }>): string {
+    return output[0]?.translation_text ?? ''
   }
 
   /**

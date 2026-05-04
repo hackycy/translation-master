@@ -9,8 +9,19 @@ export interface TranslatorOptions {
   maxPoolSize?: number
   /** Auto detect source language, default true */
   autoDetect?: boolean
-  /** Custom cache implementation */
-  cache?: CacheAdapter
+  /**
+   * Run model inference in a Web Worker to keep the main thread free.
+   * - `true` — always use worker (throws if Workers unavailable)
+   * - `false` — always run on main thread
+   * - `'auto'` (default) — use worker when available, fallback to main thread
+   */
+  useWorker?: boolean | 'auto'
+  /**
+   * Custom URL for the translation worker script.
+   * Only used when useWorker is enabled.
+   * Default: auto-resolved from the package's bundled worker entry.
+   */
+  workerUrl?: URL | string
   /** Enable built-in toast progress UI, default true */
   ui?: boolean
   /** Enable debug mode for full result metadata, default false */

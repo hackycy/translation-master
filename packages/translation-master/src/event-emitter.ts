@@ -1,4 +1,4 @@
-export type EventName = 'modelLoad' | 'translate' | 'error'
+export type EventName = 'modelLoad' | 'translate' | 'error' | 'domTranslate'
 
 export interface ModelLoadEvent {
   modelId: string
@@ -22,10 +22,19 @@ export interface ErrorEvent {
   context?: string
 }
 
+export interface DOMTranslateEvent {
+  phase: 'scanning' | 'translating' | 'rendering' | 'done' | 'cancelled'
+  translatedGroups: number
+  totalGroups: number
+  currentBatch?: number
+  totalBatches?: number
+}
+
 interface EventMap {
   modelLoad: ModelLoadEvent
   translate: TranslateEvent
   error: ErrorEvent
+  domTranslate: DOMTranslateEvent
 }
 
 type Listener<T> = (event: T) => void

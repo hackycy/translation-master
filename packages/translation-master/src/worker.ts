@@ -1,14 +1,14 @@
-import type { TranslateOptions } from './types'
+import type { TranslateOptions, TranslatorOptions } from './types'
 import { Translator } from './translator'
 
 export interface WorkerMessage {
-  type: 'translate' | 'translateBatch' | 'detect' | 'preload' | 'dispose'
+  type: 'init' | 'translate' | 'translateBatch' | 'detect' | 'preload' | 'dispose'
   id: string
   payload: unknown
 }
 
 export interface WorkerResponse {
-  type: 'result' | 'error'
+  type: 'result' | 'error' | 'event'
   id: string
   payload: unknown
 }
@@ -31,6 +31,28 @@ workerSelf.onmessage = async (e: MessageEvent<WorkerMessage>) => {
     let result: unknown
 
     switch (type) {
+      case 'init': {
+        const options = payload as TranslatorOptions | undefined
+        if (translator) {
+          await translator.dispose()
+        }
+        translator = new Translator({ ...options, ui: false })
+        // Wire up events to forward to main thread
+        translator.events.on('modelLoad', (event) => {
+          const resp: WorkerResponse = { type: 'event', id: '__event', payload: { eventName: 'modelLoad', data: event } }
+          workerSelf.postMessage(resp)
+        })
+        translator.events.on('translate', (event) => {
+          const resp: WorkerResponse = { type: 'event', id: '__event', payload: { eventName: 'translate', data: event } }
+          workerSelf.postMessage(resp)
+        })
+        translator.events.on('error', (event) => {
+          const resp: WorkerResponse = { type: 'event', id: '__event', payload: { eventName: 'error', data: event } }
+          workerSelf.postMessage(resp)
+        })
+        result = { success: true }
+        break
+      }
       case 'translate': {
         const { text, options } = payload as { text: string, options: TranslateOptions }
         result = await getTranslator().translate(text, options)

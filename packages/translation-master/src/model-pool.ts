@@ -1,10 +1,12 @@
 import type { PoolStats } from './types'
 
-// Use any for pipeline to avoid complex union type issues with transformers.js
-type PipelineInstance = any
+export interface PipelineInstance {
+  (text: string, options?: Record<string, unknown>): Promise<Array<{ translation_text: string }>>
+  dispose?: () => Promise<void>
+}
 
 interface PoolEntry {
-  pipeline: PipelineInstance
+  pipeline: PipelineInstance | null
   refCount: number
   lastAccess: number
   loading: Promise<PipelineInstance> | null
