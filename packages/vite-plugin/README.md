@@ -1,58 +1,89 @@
-# vite-plugin-translate
+# @translation-master/vite-plugin
 
-[![npm version][npm-version-src]][npm-version-href]
-[![npm downloads][npm-downloads-src]][npm-downloads-href]
+Vite 插件，用于将 [translate.js](https://github.com/ChunyuPCY/translate.js) 脚本注入 HTML 页面。
 
-Vite plugin for [translate.js](https://github.com/xnx3/translate)
+## 安装
 
-## Install
-
-``` bash
-pnpm add -D vite-plugin-translate
+```bash
+pnpm add -D @translation-master/vite-plugin
 ```
 
-## Usage
+## 使用
 
 ```ts
+// vite.config.ts
+import TranslatePlugin from '@translation-master/vite-plugin'
 import { defineConfig } from 'vite'
-import { ViteTranslatePlugin } from 'vite-plugin-translate'
 
 export default defineConfig({
   plugins: [
-    ViteTranslatePlugin({
-      version: '4.0.3',
-      initializeScript: `
-      try {
-        // 不出现的select的选择语言
-        translate.selectLanguageTag.show = false;
-
-        // 设置机器翻译服务通道
-        translate.service.use('client.edge');
-
-        //开启html页面变化的监控
-        translate.listener.start();
-      } catch (error) {
-        // ignore
-      }
-      `,
+    TranslatePlugin({
+      version: '3.18.66',
     }),
   ],
 })
 ```
 
-`ViteTranslatePlugin` will read `bundle/<version>/translate.js` from the installed package, emit it to the build output with a version and timestamp in the file name, and inject the script tag into HTML automatically.
+## 选项
 
-When `initializeScript` is provided, the plugin injects it as a second script tag after `translate.js`, so the initialization code runs only after `translate.js` has been loaded and executed.
+```ts
+interface PluginOptions {
+  /**
+   * 是否自动注入 translate.js 脚本到 HTML 中
+   * @default true
+   */
+  inject?: boolean
 
-Supported versions: `3.18.66`, `4.0.3`.
+  /**
+   * translate.js 版本（必填）
+   * 支持：'3.18.66' | '4.0.3'
+   */
+  version: VERSION
 
-## License
+  /**
+   * 在 translate.js 加载并执行后注入的初始化脚本
+   */
+  initializeScript?: string
+}
+```
 
-[MIT](./LICENSE) License © [hackycy](https://github.com/hackycy)
+| 选项 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `inject` | `boolean` | `true` | 是否注入脚本 |
+| `version` | `'3.18.66' \| '4.0.3'` | 必填 | translate.js 版本 |
+| `initializeScript` | `string` | - | translate.js 加载后执行的脚本 |
 
-<!-- Badges -->
+## 行为
 
-[npm-version-src]: https://img.shields.io/npm/v/vite-plugin-translate?style=flat&colorA=080f12&colorB=1fa669
-[npm-version-href]: https://npmjs.com/package/vite-plugin-translate
-[npm-downloads-src]: https://img.shields.io/npm/dm/vite-plugin-translate?style=flat&colorA=080f12&colorB=1fa669
-[npm-downloads-href]: https://npmjs.com/package/vite-plugin-translate
+### 开发环境（`vite dev`）
+
+- 从磁盘读取 translate.js 包
+- 作为内联 `<script>` 标签注入 HTML
+- 可选追加 `initializeScript`
+
+### 生产环境（`vite build`）
+
+- 将 translate.js 包作为带哈希的资源文件输出
+- 注入指向该资源的 `<script src="...">` 标签
+- 资源文件名包含版本和时间戳，用于缓存失效
+
+### SSR
+
+- 当 `build.ssr` 为 `true` 时不执行任何操作
+
+## 带初始化脚本的示例
+
+```ts
+TranslatePlugin({
+  version: '3.18.66',
+  initializeScript: `
+    translate.language.setLocal('chinese_simplified');
+    translate.selectLanguageTag.show({ select: 'LanguageSelector' });
+    translate.execute();
+  `,
+})
+```
+
+## 许可证
+
+[MIT](../../LICENSE) License
