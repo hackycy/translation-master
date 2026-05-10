@@ -115,7 +115,7 @@ tmigrate init
 支持选项：
 
 ```bash
-# 交互式配置（问答引导选择 sourceLocale、targetLocale、include 等）
+# 交互式配置（问答引导选择 sourceLocale、targetLocale、include 等，基于 @clack/prompts）
 tmigrate init --interactive
 
 # 指定源语言 / 目标语言
@@ -471,7 +471,8 @@ tmigrate scan ./src --clean-deprecated
 packages/i18n-migrate-cli/
 ├── src/
 │   ├── index.ts                 # 公共 API
-│   ├── cli.ts                   # CLI 命令注册
+│   ├── cli.ts                   # CLI 命令注册（commander）
+│   ├── prompts.ts               # 终端交互封装（@clack/prompts: select, input, spinner 等）
 │   ├── init.ts                  # init 命令（目录生成 + 交互式配置）
 │   ├── scanner.ts               # 文件扫描（glob + 过滤 + 增量）
 │   ├── types.ts                 # 类型定义
@@ -608,10 +609,20 @@ interface TranslateResult {
     "yaml": "^2.6",
     "globby": "^14.0",
     "picocolors": "^1.1",
-    "commander": "^12.0"
+    "commander": "^12.0",
+    "@clack/prompts": "^1.3.0"
   }
 }
 ```
+
+`@clack/prompts` 提供终端交互能力，用于以下场景：
+
+- **`init --interactive`** — `select` 选择源语言/目标语言，`multiselect` 选择文件类型，`input` 输入自定义 include/exclude 规则
+- **`scan` 确认** — 扫描前展示待处理文件数，`confirm` 确认是否继续
+- **`apply` 选择** — `multiselect` 选择要回写的目录/模块
+- **全局加载状态** — `spinner` 展示扫描/翻译/回写进度
+
+与 `commander`（命令解析）互补，不冲突。
 
 ## 与现有架构的关系
 
