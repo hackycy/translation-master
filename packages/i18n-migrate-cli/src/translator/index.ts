@@ -6,6 +6,8 @@ export function createTranslator(config: MigrateConfig): Translator {
   if (config.translator === 'api') {
     return new ApiTranslator({
       apiKey: config.translatorOptions.apiKey,
+      endpoint: config.translatorOptions.endpoint,
+      timeout: config.translatorOptions.timeout,
     })
   }
 

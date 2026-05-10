@@ -31,7 +31,7 @@
   └───┬───┘
       │
 ┌─────▼─────┐
-│  Replacer  │  读取最终映射，AST 级回写源文件
+│  Replacer  │  读取最终映射，按源码区间回写源文件
 └─────┬─────┘
       │
 ┌─────▼─────┐
@@ -221,6 +221,7 @@ tmigrate restore --list
   "translatorOptions": {
     "modelBaseUrl": "https://cdn.example.com/models",
     "apiKey": "",            // api 模式下的鉴权 token
+    "endpoint": "",          // api 模式下的 HTTP endpoint
     "timeout": 30000,        // 单次请求超时（ms）
     "retries": 3,            // 失败重试次数
     "concurrency": 5         // 并发请求数
@@ -327,10 +328,10 @@ similarity = 2 * LCS_length(text_a, text_b) / (len(text_a) + len(text_b))
 | 文件类型 | 解析器 | 说明 |
 |---------|--------|------|
 | `.vue` | `@vue/compiler-sfc` + 子解析器 | 拆分为 template/script/style 后分别处理 |
-| `.ts` / `.tsx` | `@babel/parser` (AST) | 提取字符串字面量、模板字面量 |
-| `.js` / `.jsx` | `@babel/parser` (AST) | 同上 |
-| `.json` | `JSON.parse` | 递归遍历所有 string value |
-| `.html` | `parse5` | 提取文本节点和可翻译属性 |
+| `.ts` / `.tsx` | `@babel/parser` + 区间解析 | 语法容错校验后提取字符串字面量、模板字面量 |
+| `.js` / `.jsx` | `@babel/parser` + 区间解析 | 同上 |
+| `.json` | `JSON.parse` + 区间解析 | 校验 JSON 后提取 string value |
+| `.html` | HTML 区间解析 | 提取文本节点和可翻译属性 |
 | `.css` / `.scss` / `.less` | 正则 | 只处理 `content` 属性值 |
 | `.md` | 正则 / remark | 提取段落文本，跳过代码块 |
 | `.yaml` / `.yml` | `yaml` 库 | 提取 string value |
@@ -345,7 +346,7 @@ import { parse } from '@vue/compiler-sfc'
 const { descriptor } = parse(content, { sourceMap: true })
 
 // template → HTML parser，提取文本节点和属性
-// script / script-setup → TS/JS AST parser
+// script / script-setup → TS/JS parser
 // style → 只处理 content: "中文" 属性
 ```
 
@@ -553,12 +554,12 @@ interface FileParser {
   supportedExtensions: string[]
   /** 从文件内容中提取中文文本 */
   extract(content: string, filePath: string): TextSegment[]
-  /** 将翻译结果回写到文件内容，返回新内容和 source map */
+  /** 将翻译结果回写到文件内容 */
   replace(
     content: string,
     segments: TextSegment[],
     translations: Map<string, TranslationEntry>
-  ): { content: string; sourceMap?: object }
+  ): { content: string }
 }
 ```
 
@@ -608,11 +609,10 @@ interface TranslateResult {
     "@translation-master/node": "workspace:*",
     "@vue/compiler-sfc": "^3.5",
     "@babel/parser": "^7.26",
-    "parse5": "^7.2",
     "yaml": "^2.6",
-    "globby": "^14.0",
+    "tinyglobby": "^0.2",
     "picocolors": "^1.1",
-    "commander": "^12.0",
+    "commander": "^14.0",
     "@clack/prompts": "^0.11.0"
   }
 }
@@ -620,10 +620,9 @@ interface TranslateResult {
 
 `@clack/prompts` 提供终端交互能力，用于以下场景：
 
-- **`init --interactive`** — `select` 选择源语言/目标语言，`multiselect` 选择文件类型，`input` 输入自定义 include/exclude 规则
-- **`scan` 确认** — 扫描前展示待处理文件数，`confirm` 确认是否继续
-- **`apply` 选择** — `multiselect` 选择要回写的目录/模块
-- **全局加载状态** — `spinner` 展示扫描/翻译/回写进度
+- **`init --interactive`** — `select` 选择源语言/目标语言，`multiselect` 选择文件类型，`text` 输入 source root
+- **覆盖确认** — `.tmigrate` 已存在时通过 `confirm` 确认是否覆盖
+- **全局加载状态** — `spinner` 已封装为公共 helper，可用于后续长任务进度展示
 
 与 `commander`（命令解析）互补，不冲突。
 
@@ -682,7 +681,7 @@ pnpm --dir playground exec tmigrate scan src/i18n-migrate-demo --incremental --c
 
 直接翻译含插值的字符串会破坏表达式。缓解措施：
 - 占位符保护机制
-- AST 级替换保证精度
+- 源码区间替换保证只改命中的文本范围
 
 ### 不可逆
 
@@ -705,7 +704,7 @@ pnpm --dir playground exec tmigrate scan src/i18n-migrate-demo --incremental --c
 |------|------|------|
 | P0 | 文件扫描 + Vue template/JS/TS 提取 + `.tmigrate/maps/` 分片写入 | 2-3 天 |
 | P0 | Translator 接口 + ONNX 实现 + pipeline 批量调度 + 术语表匹配 | 2 天 |
-| P0 | AST 级回写（id 做 key）+ dry-run + diff 预览 | 2 天 |
+| P0 | 源码区间回写（原文做 key）+ dry-run + diff 预览 | 2 天 |
 | P0 | apply 自动备份 + restore 回滚 | 0.5 天 |
 | P1 | CLI 封装 + `init` 命令 + config.json 配置 | 1 天 |
 | P1 | 占位符保护（插值字符串） | 1 天 |

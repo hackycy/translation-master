@@ -24,7 +24,7 @@ export class CompositeParser implements FileParser {
     content: string,
     segments: TextSegment[],
     translations: Map<string, TranslationEntry>,
-  ): { content: string, sourceMap?: object } {
+  ): { content: string } {
     return this.parsers[0]?.replace(content, segments, translations) ?? { content }
   }
 
@@ -33,7 +33,7 @@ export class CompositeParser implements FileParser {
     filePath: string,
     segments: TextSegment[],
     translations: Map<string, TranslationEntry>,
-  ): { content: string, sourceMap?: object } {
+  ): { content: string } {
     return this.getParser(filePath)?.replace(content, segments, translations) ?? { content }
   }
 

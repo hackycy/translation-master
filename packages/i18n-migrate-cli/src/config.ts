@@ -31,6 +31,7 @@ export const DEFAULT_CONFIG: MigrateConfig = {
   translatorOptions: {
     modelBaseUrl: 'https://cdn.example.com/models',
     apiKey: '',
+    endpoint: '',
     timeout: 30000,
     retries: 3,
     concurrency: 5,

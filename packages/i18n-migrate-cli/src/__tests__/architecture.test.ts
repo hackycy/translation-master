@@ -1,6 +1,7 @@
 import type { TextSegment } from '../types'
 import { describe, expect, it } from 'vitest'
 import {
+  ApiTranslator,
   createEntry,
   createMapFile,
   DEFAULT_CONFIG,
@@ -88,5 +89,35 @@ describe('i18n migrate architecture primitives', () => {
     expect(merged.entries['提交']?.approved).toBe(true)
     expect(merged.entries['提交']?.translationSource).toBe('glossary')
     expect(merged.entries['删除']?.deprecated).toBe(true)
+  })
+
+  it('normalizes API translator endpoint responses', async () => {
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = async (_input, init) => {
+      expect(JSON.parse(String(init?.body))).toMatchObject({
+        texts: ['提交', '取消'],
+        sourceLocale: 'zh',
+        targetLocale: 'en',
+      })
+      return new Response(JSON.stringify({
+        translations: [
+          { source: '提交', translation: 'Submit', confidence: 0.9 },
+          'Cancel',
+        ],
+      }), { status: 200 })
+    }
+
+    try {
+      const translator = new ApiTranslator({ endpoint: 'https://translator.example.test', apiKey: 'token' })
+      const results = await translator.translate(['提交', '取消'], { sourceLocale: 'zh', targetLocale: 'en' })
+
+      expect(results).toEqual([
+        { source: '提交', translation: 'Submit', translationSource: 'machine', confidence: 0.9 },
+        { source: '取消', translation: 'Cancel', translationSource: 'machine' },
+      ])
+    }
+    finally {
+      globalThis.fetch = originalFetch
+    }
   })
 })

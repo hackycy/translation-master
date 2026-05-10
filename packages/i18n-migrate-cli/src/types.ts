@@ -84,6 +84,7 @@ export type FilterRule
 export interface TranslatorOptions {
   modelBaseUrl?: string
   apiKey?: string
+  endpoint?: string
   timeout: number
   retries: number
   concurrency: number
@@ -124,7 +125,7 @@ export interface FileParser {
     content: string,
     segments: TextSegment[],
     translations: Map<string, TranslationEntry>,
-  ) => { content: string, sourceMap?: object }
+  ) => { content: string }
 }
 
 export interface ScanOptions {

@@ -4,7 +4,6 @@ import { createDefaultParser } from './parsers/parser'
 export interface ReplaceResult {
   content: string
   applied: number
-  sourceMap?: object
 }
 
 export class Replacer {
@@ -31,7 +30,7 @@ interface FileParserWithPath extends FileParser {
     filePath: string,
     segments: TextSegment[],
     translations: Map<string, TranslationEntry>,
-  ) => { content: string, sourceMap?: object }
+  ) => { content: string }
 }
 
 function hasReplaceFile(parser: FileParser): parser is FileParserWithPath {
