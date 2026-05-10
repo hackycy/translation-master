@@ -17,6 +17,16 @@ class EchoTranslator implements Translator {
   }
 }
 
+class ZhEchoTranslator implements Translator {
+  async translate(texts: string[]) {
+    return texts.map(text => ({
+      source: text,
+      translation: `中文:${text}`,
+      translationSource: 'machine' as const,
+    }))
+  }
+}
+
 afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map(async dir => import('node:fs/promises').then(fs => fs.rm(dir, { recursive: true, force: true }))))
 })
@@ -56,6 +66,31 @@ describe('i18n migrate workflow', () => {
     const restored = await restoreBackups({ cwd })
     expect(restored.restored).toEqual(['src/App.vue'])
     expect(await readFile(sourcePath, 'utf8')).toContain('提交')
+  })
+
+  it('scans and applies English to Chinese migrations', async () => {
+    const cwd = await createTempProject()
+    const sourcePath = path.join(cwd, 'src', 'Dashboard.vue')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, '<template><h1>Order Management</h1><button title="Create order">Search</button></template>\n', 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'en', to: 'zh' })
+    await writeFile(path.join(cwd, '.tmigrate', 'glossary.json'), JSON.stringify({ Search: '搜索' }, null, 2), 'utf8')
+
+    const scan = await scanProject({ cwd, path: 'src', translator: new ZhEchoTranslator() })
+    expect(scan.scannedFiles).toBe(1)
+    expect(scan.extractedTexts).toBe(3)
+
+    const mapPath = path.join(cwd, '.tmigrate', 'maps', 'src', 'Dashboard.vue.json')
+    const map = JSON.parse(await readFile(mapPath, 'utf8')) as { entries: Record<string, { approved: boolean, translation: string }> }
+    expect(map.entries.Search).toMatchObject({ approved: true, translation: '搜索' })
+    expect(map.entries['Order Management']).toMatchObject({ approved: false, translation: '中文:Order Management' })
+
+    map.entries['Order Management']!.approved = true
+    await writeFile(mapPath, JSON.stringify(map, null, 2), 'utf8')
+
+    const preview = await applyTranslations({ cwd, dryRun: true })
+    expect(preview.files[0]?.diff).toContain('+<template><h1>中文:Order Management</h1><button title="Create order">搜索</button></template>')
   })
 })
 

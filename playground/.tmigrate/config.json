@@ -1,8 +1,8 @@
 {
-  "sourceLocale": "zh",
-  "targetLocale": "en",
+  "sourceLocale": "en",
+  "targetLocale": "zh",
   "include": [
-    "src/**/*.{vue,ts,tsx,js,jsx,json,html,css,scss,less,md,yaml,yml}"
+    "src/i18n-migrate-en-demo/**/*.{vue,ts,tsx,js,jsx,json,html,css,scss,less,md,yaml,yml}"
   ],
   "exclude": [
     "node_modules",
@@ -34,7 +34,19 @@
     },
     {
       "type": "skip-pattern",
-      "value": "^[a-zA-Z]"
+      "value": "^[.#/]"
+    },
+    {
+      "type": "skip-pattern",
+      "value": "^[A-Z]{2}-\\d+$"
+    },
+    {
+      "type": "skip-pattern",
+      "value": "^[a-z]+$"
+    },
+    {
+      "type": "skip-pattern",
+      "value": "^[a-z]+-[a-z-]+$"
     },
     {
       "type": "min-length",
@@ -45,6 +57,7 @@
   "translatorOptions": {
     "modelBaseUrl": "https://cdn.example.com/models",
     "apiKey": "",
+    "endpoint": "",
     "timeout": 30000,
     "retries": 3,
     "concurrency": 5

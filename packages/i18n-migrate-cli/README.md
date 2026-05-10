@@ -1,6 +1,6 @@
 # @translation-master/i18n-migrate-cli
 
-> 扫描前端项目源码，提取中文文本并翻译为英文，作为 i18n 的快速替代方案。
+> 扫描前端项目源码，按 `sourceLocale` 提取可翻译文本并翻译为目标语言，作为 i18n 的快速替代方案。
 
 ## 背景
 
@@ -17,7 +17,7 @@
 └─────┬─────┘
       │
 ┌─────▼─────┐
-│  Extractor │  根据文件后缀选择 Parser，提取中文文本
+│  Extractor │  根据文件后缀选择 Parser，提取源语言文本
 └─────┬─────┘  记录位置（文件/行/列/上下文）
       │
 ┌─────▼─────┐
@@ -131,7 +131,7 @@ tmigrate init --no-overwrite
 
 ### 阶段一：扫描 + 翻译
 
-扫描项目源码，提取所有中文文本，机器翻译后写入 `.tmigrate/maps/` 分片文件。
+扫描项目源码，提取所有源语言文本，机器翻译后写入 `.tmigrate/maps/` 分片文件。
 
 ```bash
 # 全量扫描
@@ -408,8 +408,8 @@ const { descriptor } = parse(content, { sourceMap: true })
 | `skip-context` | 跳过指定上下文中的文本（`console`、`comment`、`enum`、`test`） |
 | `skip-pattern` | 跳过匹配正则的文本 |
 | `force-pattern` | 强制翻译匹配的文本（优先级高于 skip-context） |
-| `min-length` | 跳过短于指定长度的中文文本 |
-| `max-length` | 跳过长于指定长度的中文文本（可能是日志或数据） |
+| `min-length` | 跳过短于指定长度的源语言文本 |
+| `max-length` | 跳过长于指定长度的源语言文本（可能是日志或数据） |
 
 ## `.gitignore` 建议
 
@@ -451,8 +451,8 @@ const { descriptor } = parse(content, { sourceMap: true })
 5. 更新 `scan-meta.json`
 
 合并策略：
-- 新增的中文文本 → 添加新 entry（`approved: false`，`translationSource: "machine"`）
-- 已删除的中文文本 → 标记为 `deprecated`（不自动删除，人工确认）
+- 新增的源语言文本 → 添加新 entry（`approved: false`，`translationSource: "machine"`）
+- 已删除的源语言文本 → 标记为 `deprecated`（不自动删除，人工确认）
 - 文本微小变更 → fuzzy matching（LCS 比率 ≥ 0.8）关联旧 ID，**若翻译结果变化则重置 `approved: false`**
 - 文本完全变更 → 新 ID，旧 entry 标记 `deprecated`
 - 术语表命中 → 设置 `translationSource: "glossary"`，自动 `approved: true`
@@ -521,7 +521,7 @@ packages/i18n-migrate-cli/
 interface TextSegment {
   /** 稳定 ID，hash(text + filePath) */
   id: string
-  /** 原始中文文本 */
+  /** 原始源语言文本 */
   text: string
   /** 在文件中的位置 */
   start: number
@@ -552,7 +552,7 @@ interface TranslationEntry {
 interface FileParser {
   /** 支持的文件扩展名 */
   supportedExtensions: string[]
-  /** 从文件内容中提取中文文本 */
+  /** 从文件内容中提取源语言文本 */
   extract(content: string, filePath: string): TextSegment[]
   /** 将翻译结果回写到文件内容 */
   replace(
@@ -628,28 +628,28 @@ interface TranslateResult {
 
 ## Playground 演练
 
-`playground/src/i18n-migrate-demo/` 提供了覆盖 TypeScript、Vue SFC、CSS、JSON、YAML、Markdown 的测试页面源码，入口为 `playground/migrate.html`。可在仓库根目录执行：
+`playground/src/i18n-migrate-en-demo/` 提供了英文转中文的测试页面源码，覆盖 TypeScript、Vue SFC、JSON 和 Vue 模板插值场景，入口为 `playground/migrate.html`。可在仓库根目录执行：
 
 ```bash
 # 构建 CLI bin
 pnpm -F @translation-master/i18n-migrate-cli build
 
 # 初始化迁移目录
-pnpm --dir playground exec tmigrate init --from zh --to en --no-overwrite
+pnpm --dir playground exec tmigrate init --from en --to zh --no-overwrite
 
 # 演练配置中可将 translator 设置为 "api"（未配置 endpoint 时回显原文），避免本地模型下载
 # 然后扫描测试页面
-pnpm --dir playground exec tmigrate scan src/i18n-migrate-demo --to en --clean-deprecated
+pnpm --dir playground exec tmigrate scan src/i18n-migrate-en-demo --to zh --clean-deprecated
 
 # 预览已审批条目的回写 diff
-pnpm --dir playground exec tmigrate apply --path src/i18n-migrate-demo/page.ts --dry-run
+pnpm --dir playground exec tmigrate apply --path src/i18n-migrate-en-demo/page.ts --dry-run
 
 # 实际回写并从备份恢复
-pnpm --dir playground exec tmigrate apply --path src/i18n-migrate-demo/page.ts
-pnpm --dir playground exec tmigrate restore --path src/i18n-migrate-demo/page.ts
+pnpm --dir playground exec tmigrate apply --path src/i18n-migrate-en-demo/page.ts
+pnpm --dir playground exec tmigrate restore --path src/i18n-migrate-en-demo/page.ts
 
 # 验证增量扫描
-pnpm --dir playground exec tmigrate scan src/i18n-migrate-demo --incremental --clean-deprecated
+pnpm --dir playground exec tmigrate scan src/i18n-migrate-en-demo --incremental --clean-deprecated
 ```
 
 ## 与现有架构的关系

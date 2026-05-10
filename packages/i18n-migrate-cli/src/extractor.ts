@@ -15,6 +15,10 @@ export class Extractor {
       return []
 
     return this.parser.extract(content, filePath)
-      .filter(segment => shouldTranslate({ text: segment.text, context: segment.context }, this.config.rules))
+      .filter(segment => shouldTranslate({
+        text: segment.text,
+        context: segment.context,
+        sourceLocale: this.config.sourceLocale,
+      }, this.config.rules))
   }
 }

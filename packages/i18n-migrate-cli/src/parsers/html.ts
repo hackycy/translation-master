@@ -1,6 +1,5 @@
 import type { FileParser, TextContext, TextSegment, TranslationEntry } from '../types'
 import type { RangeSegment } from './range'
-import { hasChinese } from '../utils/chinese-detector'
 import { dedupeSegments, finalizeSegments, leadingSpaces, lineColumn, replaceTranslations } from './range'
 
 export const htmlParser: FileParser = {
@@ -31,21 +30,7 @@ function extractHtmlText(content: string, filePath: string, offset: number, cont
     if (endTagStart === -1)
       break
     const raw = content.slice(startTagEnd + 1, endTagStart)
-    const trimmed = raw.trim()
-    if (hasChinese(trimmed)) {
-      const leading = leadingSpaces(raw)
-      const textStart = startTagEnd + 1 + leading
-      const position = lineColumn(content, textStart)
-      segments.push({
-        text: trimmed,
-        start: offset + textStart,
-        end: offset + textStart + trimmed.length,
-        line: position.line,
-        column: position.column,
-        context,
-        nodeType: 'Text',
-      })
-    }
+    segments.push(...extractTextParts(content, raw, startTagEnd + 1, offset, context))
     cursor = endTagStart + 1
   }
   return dedupeSegments(segments, filePath)
@@ -62,7 +47,7 @@ function extractHtmlAttrs(content: string, filePath: string, offset: number): Ra
       continue
     const quoteIndex = rawAttr.search(/["']/)
     const raw = rawAttr.slice(quoteIndex + 1, -1)
-    if (!hasChinese(raw))
+    if (!raw.trim())
       continue
     const rawIndex = match.index ?? 0
     const textStart = rawIndex + quoteIndex + 1
@@ -78,4 +63,38 @@ function extractHtmlAttrs(content: string, filePath: string, offset: number): Ra
     })
   }
   return dedupeSegments(segments, filePath)
+}
+
+function extractTextParts(content: string, raw: string, rawStart: number, offset: number, context: TextContext): RangeSegment[] {
+  const segments: RangeSegment[] = []
+  const interpolationRe = /\{\{[\s\S]*?\}\}/g
+  let cursor = 0
+
+  for (const match of raw.matchAll(interpolationRe)) {
+    const index = match.index ?? 0
+    segments.push(...createTextPartSegments(content, raw.slice(cursor, index), rawStart + cursor, offset, context))
+    cursor = index + match[0].length
+  }
+
+  segments.push(...createTextPartSegments(content, raw.slice(cursor), rawStart + cursor, offset, context))
+  return segments
+}
+
+function createTextPartSegments(content: string, textPart: string, partStart: number, offset: number, context: TextContext): RangeSegment[] {
+  const trimmed = textPart.trim()
+  if (!trimmed)
+    return []
+
+  const leading = leadingSpaces(textPart)
+  const textStart = partStart + leading
+  const position = lineColumn(content, textStart)
+  return [{
+    text: trimmed,
+    start: offset + textStart,
+    end: offset + textStart + trimmed.length,
+    line: position.line,
+    column: position.column,
+    context,
+    nodeType: 'Text',
+  }]
 }

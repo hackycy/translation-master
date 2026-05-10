@@ -1,5 +1,4 @@
 import type { TextContext, TextSegment, TranslationEntry } from '../types'
-import { hasChinese } from '../utils/chinese-detector'
 import { generateId } from '../utils/id-generator'
 import { protectPlaceholders } from '../utils/placeholder'
 
@@ -59,7 +58,7 @@ export function extractQuotedStrings(
     const quote = quoted[0]
     const raw = quoted.slice(1, -1)
     const text = normalizeQuotedText(raw)
-    if (!quote || !hasChinese(text))
+    if (!quote || !text.trim())
       continue
     const rawIndex = match.index ?? 0
     const textStart = rawIndex + 1
@@ -84,7 +83,7 @@ export function extractLines(content: string, filePath: string, context: TextCon
   let offset = 0
   for (const line of content.split('\n')) {
     const trimmed = line.trim()
-    if (hasChinese(trimmed)) {
+    if (trimmed) {
       const start = offset + leadingSpaces(line)
       const position = lineColumn(content, start)
       segments.push({

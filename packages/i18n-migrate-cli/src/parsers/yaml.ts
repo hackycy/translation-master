@@ -1,6 +1,5 @@
 import type { FileParser, TextSegment, TranslationEntry } from '../types'
 import YAML from 'yaml'
-import { hasChinese } from '../utils/chinese-detector'
 import { extractLines, finalizeSegments, leadingSpaces, replaceTranslations } from './range'
 
 export const yamlParser: FileParser = {
@@ -34,5 +33,5 @@ export function extractYamlSegments(content: string, filePath: string) {
         end: start + text.length,
       }
     })
-    .filter(segment => hasChinese(segment.text))
+    .filter(segment => segment.text.trim())
 }

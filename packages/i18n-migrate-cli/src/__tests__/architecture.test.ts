@@ -6,6 +6,7 @@ import {
   createMapFile,
   DEFAULT_CONFIG,
   defineConfig,
+  Extractor,
   generateId,
   isFuzzyMatch,
   mapPathToSourcePath,
@@ -69,6 +70,23 @@ describe('i18n migrate architecture primitives', () => {
       ],
     }).rules
     expect(shouldTranslate({ text: '提示信息', context: 'console' }, rules)).toBe(true)
+  })
+
+  it('supports English source locale filtering', () => {
+    const config = defineConfig({ sourceLocale: 'en', targetLocale: 'zh' })
+
+    expect(shouldTranslate({ text: 'Order Management', context: 'template', sourceLocale: 'en' }, config.rules)).toBe(true)
+    expect(shouldTranslate({ text: '订单管理', context: 'template', sourceLocale: 'en' }, config.rules)).toBe(false)
+  })
+
+  it('does not include Vue interpolation expressions in template text segments', () => {
+    const extractor = new Extractor(defineConfig({ sourceLocale: 'zh', targetLocale: 'en' }))
+    const segments = extractor.extract(
+      '<template><p>{{ owner }} 的订单需要人工审核</p></template>',
+      'src/views/Order.vue',
+    )
+
+    expect(segments.map(segment => segment.text)).toEqual(['的订单需要人工审核'])
   })
 
   it('creates glossary entries as approved and marks missing texts deprecated on merge', () => {
