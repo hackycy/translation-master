@@ -3,11 +3,17 @@
   "private": true,
   "scripts": {
     "build": "vite build",
-    "dev": "vite"
+    "dev": "vite",
+    "script": "tsx scripts/basic-translate.ts",
+    "script:batch": "tsx scripts/batch-translate.ts",
+    "script:detect": "tsx scripts/language-detect.ts",
+    "script:cache": "tsx scripts/file-cache.ts"
   },
   "devDependencies": {
     "@translation-master/browser": "workspace:^",
+    "@translation-master/node": "workspace:^",
     "@translation-master/vite-plugin": "workspace:^",
+    "tsx": "catalog:cli",
     "vite": "catalog:cli",
     "vite-plugin-inspect": "^11.1.0"
   }

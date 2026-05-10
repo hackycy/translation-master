@@ -152,9 +152,15 @@ importers:
       '@translation-master/browser':
         specifier: workspace:^
         version: link:../packages/browser
+      '@translation-master/node':
+        specifier: workspace:^
+        version: link:../packages/node
       '@translation-master/vite-plugin':
         specifier: workspace:^
         version: link:../packages/vite-plugin
+      tsx:
+        specifier: catalog:cli
+        version: 4.20.6
       vite:
         specifier: catalog:cli
         version: 7.2.1(@types/node@24.10.0)(jiti@2.6.0)(lightningcss@1.32.0)(tsx@4.20.6)(yaml@2.8.1)
