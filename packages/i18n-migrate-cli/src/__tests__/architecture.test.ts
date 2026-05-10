@@ -69,12 +69,18 @@ describe('i18n migrate architecture primitives', () => {
   })
 
   it('composes short UI copy from glossary terms before machine translation', async () => {
+    const interpolation = '$' + '{2}'
     const results = await translateTexts({
-      texts: ['Reject current order'],
+      texts: ['Reject current order', 'Create a new order', `You have ${interpolation} pending orders`],
       config: defineConfig({ sourceLocale: 'en', targetLocale: 'zh' }),
       glossary: {
+        'Create': '创建',
         'Reject': '拒绝',
         'current order': '当前订单',
+        'new': '新',
+        'order': '订单',
+        'pending': '待处理',
+        'You have': '您有',
       },
       translator: {
         async translate() {
@@ -85,6 +91,14 @@ describe('i18n migrate architecture primitives', () => {
 
     expect(results['Reject current order']).toMatchObject({
       translation: '拒绝当前订单',
+      translationSource: 'glossary',
+    })
+    expect(results['Create a new order']).toMatchObject({
+      translation: '创建新订单',
+      translationSource: 'glossary',
+    })
+    expect(results[`You have ${interpolation} pending orders`]).toMatchObject({
+      translation: `您有${interpolation}待处理订单`,
       translationSource: 'glossary',
     })
   })

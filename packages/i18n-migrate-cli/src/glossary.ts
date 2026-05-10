@@ -5,6 +5,9 @@ import { toPosixPath } from './paths'
 
 export type Glossary = Record<string, string>
 
+const INTERPOLATION_RE = /(\{\{[\s\S]*?\}\}|\$\{[\s\S]*?\})/
+const DROPPABLE_SOURCE_WORDS = new Set(['a', 'an', 'the', 'has', 'to', 'of'])
+
 export async function loadGlossary(cwd = process.cwd()): Promise<Glossary> {
   return readJsonFile<Glossary>(path.join(cwd, '.tmigrate', 'glossary.json'), {})
 }
@@ -47,6 +50,13 @@ export function composeGlossaryTranslation(text: string, glossary: Glossary, fil
       continue
     }
 
+    const interpolation = normalizedText.slice(cursor).match(INTERPOLATION_RE)?.[0]
+    if (interpolation && normalizedText.startsWith(interpolation, cursor)) {
+      chunks.push(interpolation)
+      cursor += interpolation.length
+      continue
+    }
+
     const punctuation = normalizedText.slice(cursor).match(/^[,.;:!?()[\]{}"'`-]+/)?.[0]
     if (punctuation) {
       chunks.push(punctuation)
@@ -54,12 +64,21 @@ export function composeGlossaryTranslation(text: string, glossary: Glossary, fil
       continue
     }
 
-    const term = terms.find(term => matchesAt(normalizedText, cursor, term.source))
+    const term = findMatchingTerm(normalizedText, cursor, terms)
+    if (term) {
+      chunks.push(term.translation)
+      cursor += term.length
+      continue
+    }
+
+    const word = normalizedText.slice(cursor).match(/^[a-z]+/i)?.[0]
+    if (word && DROPPABLE_SOURCE_WORDS.has(word.toLocaleLowerCase())) {
+      cursor += word.length
+      continue
+    }
+
     if (!term)
       return undefined
-
-    chunks.push(term.translation)
-    cursor += term.source.length
   }
 
   return joinGlossaryChunks(chunks)
@@ -98,10 +117,55 @@ function stripContextPrefix(source: string, contextPrefixes: Set<string>): strin
   return source
 }
 
-function matchesAt(text: string, start: number, source: string): boolean {
-  return text.slice(start, start + source.length).toLocaleLowerCase() === source.toLocaleLowerCase()
-    && isWordBoundary(text[start - 1])
-    && isWordBoundary(text[start + source.length])
+function findMatchingTerm(
+  text: string,
+  start: number,
+  terms: Array<{ source: string, translation: string }>,
+): { translation: string, length: number } | undefined {
+  for (const term of terms) {
+    const length = matchTermLength(text, start, term.source)
+    if (length)
+      return { translation: term.translation, length }
+  }
+  return undefined
+}
+
+function matchTermLength(text: string, start: number, source: string): number | undefined {
+  for (const variant of termVariants(source)) {
+    if (
+      text.slice(start, start + variant.length).toLocaleLowerCase() === variant.toLocaleLowerCase()
+      && isWordBoundary(text[start - 1])
+      && isWordBoundary(text[start + variant.length])
+    ) {
+      return variant.length
+    }
+  }
+  return undefined
+}
+
+function termVariants(source: string): string[] {
+  const variants = [source]
+  const plural = pluralizeEnglishTerm(source)
+  if (plural && plural !== source)
+    variants.push(plural)
+  return variants.sort((a, b) => b.length - a.length)
+}
+
+function pluralizeEnglishTerm(source: string): string | undefined {
+  if (!/^[a-z][a-z\s-]*$/i.test(source))
+    return undefined
+
+  const lastWord = source.match(/[a-z]+$/i)?.[0]
+  if (!lastWord)
+    return undefined
+
+  const plural = lastWord.endsWith('y')
+    ? `${lastWord.slice(0, -1)}ies`
+    : /(?:[sxz]|ch|sh)$/i.test(lastWord)
+      ? `${lastWord}es`
+      : `${lastWord}s`
+
+  return `${source.slice(0, -lastWord.length)}${plural}`
 }
 
 function isWordBoundary(char: string | undefined): boolean {

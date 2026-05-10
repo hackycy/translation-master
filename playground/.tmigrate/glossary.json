@@ -2,11 +2,15 @@
   "Order Management": "订单管理",
   "Review Center": "审核中心",
   "Create Order": "创建订单",
+  "Create": "创建",
+  "new": "新",
+  "order": "订单",
+  "pending": "待处理",
+  "You have": "您有",
   "Enter customer name": "请输入客户名称",
   "Approve": "通过",
   "Reject": "拒绝",
   "current order": "当前订单",
-  "orders": "订单",
   "Pending review": "待审核",
   "Ready to ship": "待发货"
 }

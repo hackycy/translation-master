@@ -320,7 +320,7 @@ similarity = 2 * LCS_length(text_a, text_b) / (len(text_a) + len(text_b))
 1. **上下文精确匹配** — `glossary["订单/状态/已激活"]` 且当前文本所在模块为"订单"
 2. **无上下文精确匹配** — `glossary["确定"]`
 3. **上下文前缀匹配** — `glossary["订单/状态/*"]` 匹配"订单"模块下"状态"父级的所有文本
-4. **短语术语组合** — 当整句未命中时，按最长术语组合短 UI 文案，例如 `Reject + current order` → `拒绝当前订单`
+4. **短语术语组合** — 当整句未命中时，按最长术语组合短 UI 文案，并支持英文大小写、简单复数、插值占位符和少量停用词，例如 `Reject + current order` → `拒绝当前订单`
 
 术语表命中的条目自动设置 `translationSource: "glossary"` 和 `approved: true`，无需人工确认。机器翻译的条目设置 `translationSource: "machine"` 和 `approved: false`，需人工校对后改为 `true`。
 
