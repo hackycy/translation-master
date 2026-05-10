@@ -38,7 +38,7 @@
     "prepublishOnly": "nr build",
     "release": "bumpp",
     "start": "tsx src/index.ts",
-    "test": "vitest",
+    "test": "vitest --passWithNoTests",
     "typecheck": "tsc"
   },
   "peerDependencies": {

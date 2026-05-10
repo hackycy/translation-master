@@ -32,7 +32,7 @@
     "lint": "eslint",
     "prepublishOnly": "nr build",
     "release": "bumpp",
-    "test": "vitest",
+    "test": "vitest --passWithNoTests",
     "typecheck": "tsc"
   },
   "peerDependencies": {

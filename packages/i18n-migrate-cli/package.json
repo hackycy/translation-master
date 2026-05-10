@@ -1,8 +1,8 @@
 {
-  "name": "@translation-master/browser",
+  "name": "@translation-master/i18n-migrate-cli",
   "type": "module",
   "version": "0.0.1",
-  "description": "Browser translation library with DOM support, powered by Transformers.js",
+  "description": "CLI for extracting and applying source-level i18n migrations",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
   "homepage": "https://github.com/hackycy-collection/translation-master#readme",
@@ -11,22 +11,29 @@
     "url": "git+https://github.com/hackycy-collection/translation-master.git"
   },
   "bugs": "https://github.com/hackycy-collection/translation-master/issues",
-  "keywords": [],
+  "keywords": [
+    "i18n",
+    "translation",
+    "cli"
+  ],
   "sideEffects": false,
   "exports": {
     ".": {
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
-    "./worker": {
-      "import": "./dist/worker.mjs",
-      "require": "./dist/worker.cjs"
+    "./bin/tmigrate": {
+      "import": "./dist/bin/tmigrate.mjs",
+      "require": "./dist/bin/tmigrate.cjs"
     },
     "./package.json": "./package.json"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.cts",
+  "bin": {
+    "tmigrate": "./dist/bin/tmigrate.mjs"
+  },
   "files": [
     "dist"
   ],
@@ -40,7 +47,19 @@
     "typecheck": "tsc"
   },
   "dependencies": {
-    "@huggingface/transformers": "^3.8.0",
-    "@translation-master/core": "workspace:*"
+    "@babel/parser": "^7.28.5",
+    "@translation-master/core": "workspace:*",
+    "@translation-master/node": "workspace:*",
+    "@vue/compiler-sfc": "^3.5.13",
+    "commander": "^14.0.1",
+    "picocolors": "^1.1.1",
+    "tinyglobby": "^0.2.15",
+    "yaml": "catalog:testing"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:types",
+    "tsdown": "catalog:cli",
+    "typescript": "catalog:cli",
+    "vitest": "catalog:testing"
   }
 }
