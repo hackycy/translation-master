@@ -1,12 +1,12 @@
 import type { FileParser, MigrateConfig, TextSegment } from './types'
 import path from 'node:path'
-import { simpleParser } from './parsers/simple'
+import { createDefaultParser } from './parsers/parser'
 import { shouldTranslate } from './utils/filter'
 
 export class Extractor {
   constructor(
-    private readonly parser: FileParser = simpleParser,
     private readonly config: MigrateConfig,
+    private readonly parser: FileParser = createDefaultParser(),
   ) {}
 
   extract(content: string, filePath: string): TextSegment[] {

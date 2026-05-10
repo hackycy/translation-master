@@ -1,0 +1,123 @@
+{
+  "version": 2,
+  "generatedAt": "2026-05-10T16:09:38.988Z",
+  "entries": {
+    "订单审核": {
+      "id": "452832a6",
+      "translation": "订单审核",
+      "translationSource": "machine",
+      "approved": false,
+      "skip": false,
+      "location": {
+        "line": 3,
+        "column": 9,
+        "context": "template"
+      },
+      "deprecated": false
+    },
+    "{{ owner }} 的订单需要人工审核": {
+      "id": "7b8fc274",
+      "translation": "{{ owner }} 的订单需要人工审核",
+      "translationSource": "machine",
+      "approved": false,
+      "skip": false,
+      "location": {
+        "line": 4,
+        "column": 8,
+        "context": "template"
+      },
+      "deprecated": false
+    },
+    "通过": {
+      "id": "bbba85d9",
+      "translation": "Approve",
+      "translationSource": "glossary",
+      "approved": true,
+      "skip": false,
+      "location": {
+        "line": 5,
+        "column": 28,
+        "context": "template"
+      },
+      "deprecated": false
+    },
+    "拒绝": {
+      "id": "2e8690ee",
+      "translation": "Reject",
+      "translationSource": "glossary",
+      "approved": true,
+      "skip": false,
+      "location": {
+        "line": 6,
+        "column": 28,
+        "context": "template"
+      },
+      "deprecated": false
+    },
+    "通过当前订单": {
+      "id": "cec19214",
+      "translation": "通过当前订单",
+      "translationSource": "machine",
+      "approved": false,
+      "skip": false,
+      "location": {
+        "line": 5,
+        "column": 20,
+        "context": "html-attr"
+      },
+      "deprecated": false
+    },
+    "拒绝当前订单": {
+      "id": "c0864420",
+      "translation": "拒绝当前订单",
+      "translationSource": "machine",
+      "approved": false,
+      "skip": false,
+      "location": {
+        "line": 6,
+        "column": 20,
+        "context": "html-attr"
+      },
+      "deprecated": false
+    },
+    "王五": {
+      "id": "b484dab1",
+      "translation": "王五",
+      "translationSource": "machine",
+      "approved": false,
+      "skip": false,
+      "location": {
+        "line": 11,
+        "column": 16,
+        "context": "script"
+      },
+      "deprecated": false
+    },
+    "共 ${2} 条待审核订单": {
+      "id": "0c53409e",
+      "translation": "共 ${2} 条待审核订单",
+      "translationSource": "machine",
+      "approved": false,
+      "skip": false,
+      "location": {
+        "line": 12,
+        "column": 14,
+        "context": "script"
+      },
+      "deprecated": false
+    },
+    "请及时处理": {
+      "id": "efabbba7",
+      "translation": "请及时处理",
+      "translationSource": "machine",
+      "approved": false,
+      "skip": false,
+      "location": {
+        "line": 17,
+        "column": 13,
+        "context": "style"
+      },
+      "deprecated": false
+    }
+  }
+}

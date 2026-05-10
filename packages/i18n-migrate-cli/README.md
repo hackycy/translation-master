@@ -198,7 +198,7 @@ tmigrate restore --list
   "targetLocale": "en",
 
   // 文件包含/排除规则
-  "include": ["src/**/*.{vue,ts,tsx,js,jsx,json,html}"],
+  "include": ["src/**/*.{vue,ts,tsx,js,jsx,json,html,css,scss,less,md,yaml,yml}"],
   "exclude": [
     "node_modules",
     "dist",
@@ -472,7 +472,7 @@ packages/i18n-migrate-cli/
 ├── src/
 │   ├── index.ts                 # 公共 API
 │   ├── cli.ts                   # CLI 命令注册（commander）
-│   ├── prompts.ts               # 终端交互封装（@clack/prompts: select, input, spinner 等）
+│   ├── prompts.ts               # 终端交互封装（@clack/prompts: select, text, spinner 等）
 │   ├── init.ts                  # init 命令（目录生成 + 交互式配置）
 │   ├── scanner.ts               # 文件扫描（glob + 过滤 + 增量）
 │   ├── types.ts                 # 类型定义
@@ -489,10 +489,12 @@ packages/i18n-migrate-cli/
 │   ├── extractor.ts             # 文本提取编排器
 │   ├── translator/
 │   │   ├── interface.ts         # Translator 抽象接口
-│   │   ├── onnx.ts              # 本地 ONNX 翻译器
+│   │   ├── onnx.ts              # 本地 ONNX 翻译器别名入口
+│   │   ├── local.ts             # 复用 @translation-master/node 的本地翻译器
 │   │   ├── api.ts               # 外部 API 翻译器适配
 │   │   └── pipeline.ts          # 翻译流水线（批量调度、并发控制、重试）
 │   ├── replacer.ts              # AST 级回写器
+│   ├── apply.ts                 # apply / restore 命令编排
 │   ├── backup.ts                # apply 前自动备份 + restore 回滚
 │   ├── mapping.ts               # 分片映射文件读写 + 合并
 │   ├── cache.ts                 # 增量扫描缓存管理
@@ -510,6 +512,8 @@ packages/i18n-migrate-cli/
 ├── tsconfig.json
 └── tsdown.config.ts
 ```
+
+> 实现说明：当前 `parsers/*.ts` 已按文件类型拆分为稳定入口，内部复用同一套轻量源码区间提取/回写逻辑，保证 CLI 工作流先完整闭环。后续如果需要更强 AST 精度，可在对应 parser 文件内替换实现，不影响 `Extractor` / `Replacer` / CLI 命令接口。
 
 ## Parser 接口
 
@@ -610,7 +614,7 @@ interface TranslateResult {
     "globby": "^14.0",
     "picocolors": "^1.1",
     "commander": "^12.0",
-    "@clack/prompts": "^1.3.0"
+    "@clack/prompts": "^0.11.0"
   }
 }
 ```
@@ -623,6 +627,32 @@ interface TranslateResult {
 - **全局加载状态** — `spinner` 展示扫描/翻译/回写进度
 
 与 `commander`（命令解析）互补，不冲突。
+
+## Playground 演练
+
+`playground/src/i18n-migrate-demo/` 提供了覆盖 TypeScript、Vue SFC、CSS、JSON、YAML、Markdown 的测试页面源码，入口为 `playground/migrate.html`。可在仓库根目录执行：
+
+```bash
+# 构建 CLI bin
+pnpm -F @translation-master/i18n-migrate-cli build
+
+# 初始化迁移目录
+pnpm --dir playground exec tmigrate init --from zh --to en --no-overwrite
+
+# 演练配置中可将 translator 设置为 "api"（未配置 endpoint 时回显原文），避免本地模型下载
+# 然后扫描测试页面
+pnpm --dir playground exec tmigrate scan src/i18n-migrate-demo --to en --clean-deprecated
+
+# 预览已审批条目的回写 diff
+pnpm --dir playground exec tmigrate apply --path src/i18n-migrate-demo/page.ts --dry-run
+
+# 实际回写并从备份恢复
+pnpm --dir playground exec tmigrate apply --path src/i18n-migrate-demo/page.ts
+pnpm --dir playground exec tmigrate restore --path src/i18n-migrate-demo/page.ts
+
+# 验证增量扫描
+pnpm --dir playground exec tmigrate scan src/i18n-migrate-demo --incremental --clean-deprecated
+```
 
 ## 与现有架构的关系
 

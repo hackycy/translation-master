@@ -2,7 +2,7 @@ import type { MapFile, TextSegment, TranslationEntry } from './types'
 import path from 'node:path'
 import { readJsonFile, writeJsonFile } from './fs-utils'
 import { sourcePathToMapPath } from './paths'
-import { isFuzzyMatch } from './utils/fuzzy-match'
+import { isFuzzyMatch, similarity } from './utils/fuzzy-match'
 
 export function createMapFile(entries: Record<string, TranslationEntry> = {}, now = new Date()): MapFile {
   return {
@@ -49,13 +49,27 @@ export function mergeMapEntries(
     if (previousText)
       usedPreviousTexts.add(previousText)
     const nextEntry = nextEntries[segment.text]
-    const baseEntry = previousEntry ?? nextEntry ?? createEntry(segment)
-    const translationChanged = previousText && previousText !== segment.text && previousEntry?.translationSource === 'machine'
+    const baseEntry = chooseEntry(previousEntry, nextEntry)
+    const fuzzyTextChanged = Boolean(previousText && previousText !== segment.text)
+    const machineTranslationChanged = Boolean(
+      previousEntry
+      && nextEntry
+      && previousEntry.translationSource === 'machine'
+      && previousEntry.translation !== nextEntry.translation,
+    )
 
     entries[segment.text] = {
-      ...baseEntry,
-      id: segment.id,
-      approved: translationChanged ? false : baseEntry.approved,
+      ...(baseEntry ?? createEntry(segment)),
+      id: nextEntry?.translationSource === 'glossary'
+        ? segment.id
+        : fuzzyTextChanged && previousEntry
+          ? previousEntry.id
+          : segment.id,
+      approved: nextEntry?.translationSource === 'glossary'
+        ? true
+        : fuzzyTextChanged || machineTranslationChanged
+          ? false
+          : (baseEntry?.approved ?? false),
       location: {
         line: segment.line,
         column: segment.column,
@@ -96,9 +110,21 @@ function findFuzzyPreviousText(
   for (const previousText of Object.keys(previousEntries)) {
     if (usedTexts.has(previousText) || !isFuzzyMatch(text, previousText))
       continue
-    const score = text === previousText ? 1 : text.length / Math.max(previousText.length, text.length)
+    const score = similarity(text, previousText)
     if (!best || score > best.score)
       best = { text: previousText, score }
   }
   return best?.text
+}
+
+function chooseEntry(previousEntry: TranslationEntry | undefined, nextEntry: TranslationEntry | undefined): TranslationEntry | undefined {
+  if (!previousEntry)
+    return nextEntry
+  if (!nextEntry)
+    return previousEntry
+  if (nextEntry.translationSource === 'glossary')
+    return nextEntry
+  if (previousEntry.translationSource === 'manual' || previousEntry.approved)
+    return previousEntry
+  return nextEntry
 }

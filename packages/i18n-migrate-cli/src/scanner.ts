@@ -17,7 +17,7 @@ export async function scanProject(options: ScanOptions = {}): Promise<ScanResult
   const config = await loadConfig(cwd, options.to ? { targetLocale: options.to } : {})
   const glossary = await loadGlossary(cwd)
   const translator = options.translator ?? createTranslator(config)
-  const extractor = new Extractor(undefined, config)
+  const extractor = new Extractor(config)
   const scanMeta = await loadScanMeta(cwd)
   const files = await findSourceFiles(cwd, options.path, config.include, config.exclude)
   const result: ScanResult = { scannedFiles: 0, skippedFiles: 0, extractedTexts: 0, mapFiles: [] }
@@ -28,6 +28,13 @@ export async function scanProject(options: ScanOptions = {}): Promise<ScanResult
     const previousMeta = scanMeta[sourcePath]
 
     if (options.incremental && previousMeta?.hash === hash) {
+      if (options.cleanDeprecated) {
+        const previousMap = await readMapFile(cwd, sourcePath)
+        const cleanedEntries = Object.fromEntries(
+          Object.entries(previousMap.entries).filter(([, entry]) => !entry.deprecated),
+        )
+        await writeMapFile(cwd, sourcePath, { ...previousMap, generatedAt: new Date().toISOString(), entries: cleanedEntries })
+      }
       result.skippedFiles++
       continue
     }

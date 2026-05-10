@@ -1,0 +1,240 @@
+{
+  "version": 2,
+  "generatedAt": "2026-05-10T16:09:38.990Z",
+  "entries": {
+    "待付款": {
+      "id": "176712b9",
+      "translation": "待付款",
+      "translationSource": "machine",
+      "approved": false,
+      "skip": false,
+      "location": {
+        "line": 7,
+        "column": 13,
+        "context": "script"
+      },
+      "deprecated": false
+    },
+    "已支付": {
+      "id": "01be57b3",
+      "translation": "已支付",
+      "translationSource": "machine",
+      "approved": false,
+      "skip": false,
+      "location": {
+        "line": 8,
+        "column": 10,
+        "context": "script"
+      },
+      "deprecated": false
+    },
+    "已取消": {
+      "id": "e7757023",
+      "translation": "已取消",
+      "translationSource": "machine",
+      "approved": false,
+      "skip": false,
+      "location": {
+        "line": 9,
+        "column": 15,
+        "context": "script"
+      },
+      "deprecated": false
+    },
+    "张三": {
+      "id": "bd525f4a",
+      "translation": "张三",
+      "translationSource": "machine",
+      "approved": false,
+      "skip": false,
+      "location": {
+        "line": 13,
+        "column": 28,
+        "context": "script"
+      },
+      "deprecated": false
+    },
+    "李四": {
+      "id": "46a57976",
+      "translation": "李四",
+      "translationSource": "machine",
+      "approved": false,
+      "skip": false,
+      "location": {
+        "line": 14,
+        "column": 28,
+        "context": "script"
+      },
+      "deprecated": false
+    },
+    "订单编号": {
+      "id": "7b498050",
+      "translation": "订单编号",
+      "translationSource": "machine",
+      "approved": false,
+      "skip": false,
+      "location": {
+        "line": 39,
+        "column": 12,
+        "context": "script"
+      },
+      "deprecated": false
+    },
+    "请输入订单编号": {
+      "id": "92d24796",
+      "translation": "Enter order number",
+      "translationSource": "glossary",
+      "approved": true,
+      "skip": false,
+      "location": {
+        "line": 39,
+        "column": 20,
+        "context": "script"
+      },
+      "deprecated": false
+    },
+    "客户名称": {
+      "id": "58e76520",
+      "translation": "客户名称",
+      "translationSource": "machine",
+      "approved": false,
+      "skip": false,
+      "location": {
+        "line": 40,
+        "column": 12,
+        "context": "script"
+      },
+      "deprecated": false
+    },
+    "请输入客户名称": {
+      "id": "7bfc6beb",
+      "translation": "Enter customer name",
+      "translationSource": "glossary",
+      "approved": true,
+      "skip": false,
+      "location": {
+        "line": 40,
+        "column": 20,
+        "context": "script"
+      },
+      "deprecated": false
+    },
+    "查询": {
+      "id": "74011c93",
+      "translation": "Search",
+      "translationSource": "glossary",
+      "approved": true,
+      "skip": false,
+      "location": {
+        "line": 41,
+        "column": 13,
+        "context": "script"
+      },
+      "deprecated": false
+    },
+    "重置": {
+      "id": "e8f603fd",
+      "translation": "Reset",
+      "translationSource": "glossary",
+      "approved": true,
+      "skip": false,
+      "location": {
+        "line": 42,
+        "column": 13,
+        "context": "script"
+      },
+      "deprecated": false
+    },
+    "订单号": {
+      "id": "791decf9",
+      "translation": "Order No.",
+      "translationSource": "glossary",
+      "approved": true,
+      "skip": false,
+      "location": {
+        "line": 46,
+        "column": 34,
+        "context": "script"
+      },
+      "deprecated": false
+    },
+    "客户": {
+      "id": "39379dc0",
+      "translation": "Customer",
+      "translationSource": "glossary",
+      "approved": true,
+      "skip": false,
+      "location": {
+        "line": 46,
+        "column": 41,
+        "context": "script"
+      },
+      "deprecated": false
+    },
+    "状态": {
+      "id": "f23f127f",
+      "translation": "Status",
+      "translationSource": "glossary",
+      "approved": true,
+      "skip": false,
+      "location": {
+        "line": 46,
+        "column": 47,
+        "context": "script"
+      },
+      "deprecated": false
+    },
+    "金额": {
+      "id": "c11f75b5",
+      "translation": "Amount",
+      "translationSource": "glossary",
+      "approved": true,
+      "skip": false,
+      "location": {
+        "line": 46,
+        "column": 53,
+        "context": "script"
+      },
+      "deprecated": false
+    },
+    "操作": {
+      "id": "20f28e42",
+      "translation": "Actions",
+      "translationSource": "glossary",
+      "approved": true,
+      "skip": false,
+      "location": {
+        "line": 46,
+        "column": 59,
+        "context": "script"
+      },
+      "deprecated": false
+    },
+    "查看详情": {
+      "id": "89b67120",
+      "translation": "View Details",
+      "translationSource": "glossary",
+      "approved": true,
+      "skip": false,
+      "location": {
+        "line": 85,
+        "column": 28,
+        "context": "script"
+      },
+      "deprecated": false
+    },
+    "查看订单详情": {
+      "id": "449e60d5",
+      "translation": "查看订单详情",
+      "translationSource": "machine",
+      "approved": false,
+      "skip": false,
+      "location": {
+        "line": 86,
+        "column": 21,
+        "context": "script"
+      },
+      "deprecated": false
+    }
+  }
+}

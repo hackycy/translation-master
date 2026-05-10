@@ -48,6 +48,7 @@
   },
   "dependencies": {
     "@babel/parser": "^7.28.5",
+    "@clack/prompts": "catalog:cli",
     "@translation-master/core": "workspace:*",
     "@translation-master/node": "workspace:*",
     "@vue/compiler-sfc": "^3.5.13",

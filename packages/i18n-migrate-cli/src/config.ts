@@ -10,7 +10,7 @@ export type MigrateConfigInput = Omit<Partial<MigrateConfig>, 'translatorOptions
 export const DEFAULT_CONFIG: MigrateConfig = {
   sourceLocale: 'zh',
   targetLocale: 'en',
-  include: ['src/**/*.{vue,ts,tsx,js,jsx,json,html}'],
+  include: ['src/**/*.{vue,ts,tsx,js,jsx,json,html,css,scss,less,md,yaml,yml}'],
   exclude: [
     'node_modules',
     'dist',

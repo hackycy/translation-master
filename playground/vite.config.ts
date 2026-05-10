@@ -12,6 +12,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         dom: resolve(__dirname, 'dom.html'),
+        migrate: resolve(__dirname, 'migrate.html'),
       },
     },
   },

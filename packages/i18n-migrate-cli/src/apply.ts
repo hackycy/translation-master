@@ -7,14 +7,15 @@ import { backupFile, listBackupEntries, loadBackupMeta } from './backup'
 import { loadConfig } from './config'
 import { Extractor } from './extractor'
 import { readMapFile } from './mapping'
-import { simpleParser } from './parsers/simple'
 import { mapPathToSourcePath, sourcePathToMapPath, toPosixPath } from './paths'
+import { Replacer } from './replacer'
 import { createUnifiedDiff } from './reporter'
 
 export async function applyTranslations(options: ApplyOptions = {}): Promise<ApplyResult> {
   const cwd = options.cwd ?? process.cwd()
   const config = await loadConfig(cwd)
-  const extractor = new Extractor(undefined, config)
+  const extractor = new Extractor(config)
+  const replacer = new Replacer()
   const sourcePaths = await findMappedSourcePaths(cwd, options.path)
   const batchId = new Date().toISOString()
   const files: ApplyResult['files'] = []
@@ -25,11 +26,9 @@ export async function applyTranslations(options: ApplyOptions = {}): Promise<App
     const mapFile = await readMapFile(cwd, sourcePath)
     const translations = new Map<string, TranslationEntry>(Object.entries(mapFile.entries))
     const segments = extractor.extract(content, sourcePath)
-    const next = simpleParser.replace(content, segments, translations).content
-    const applied = segments.filter((segment) => {
-      const entry = translations.get(segment.text)
-      return Boolean(entry?.approved && !entry.skip && entry.translation)
-    }).length
+    const replaced = replacer.replace(content, sourcePath, segments, translations)
+    const next = replaced.content
+    const applied = replaced.applied
     const changed = next !== content
 
     if (changed && !options.dryRun) {

@@ -1,0 +1,32 @@
+{
+  "version": 2,
+  "generatedAt": "2026-05-10T16:09:38.990Z",
+  "entries": {
+    "# 迁移说明": {
+      "id": "0eb6b9f1",
+      "translation": "# 迁移说明",
+      "translationSource": "machine",
+      "approved": false,
+      "skip": false,
+      "location": {
+        "line": 1,
+        "column": 1,
+        "context": "markdown"
+      },
+      "deprecated": false
+    },
+    "这个页面包含 TypeScript、JSON、CSS、YAML 和 Markdown 中的中文文本，用于验证 CLI 的多文件解析能力。": {
+      "id": "5426ec1b",
+      "translation": "这个页面包含 TypeScript、JSON、CSS、YAML 和 Markdown 中的中文文本，用于验证 CLI 的多文件解析能力。",
+      "translationSource": "machine",
+      "approved": false,
+      "skip": false,
+      "location": {
+        "line": 3,
+        "column": 1,
+        "context": "markdown"
+      },
+      "deprecated": false
+    }
+  }
+}

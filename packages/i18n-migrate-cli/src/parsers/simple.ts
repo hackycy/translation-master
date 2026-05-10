@@ -97,7 +97,14 @@ function extractVue(content: string, filePath: string): RangeSegment[] {
     segments.push(...extractStyle(style.content, filePath, offset))
   }
 
-  return segments
+  return segments.map((segment) => {
+    const position = lineColumn(content, segment.start)
+    return {
+      ...segment,
+      line: position.line,
+      column: position.column,
+    }
+  })
 }
 
 function extractScript(content: string, filePath: string, context: TextContext, offset = 0): RangeSegment[] {
