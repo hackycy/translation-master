@@ -3,7 +3,7 @@ import { ApiTranslator } from './api'
 import { LocalTranslator } from './local'
 
 export function createTranslator(config: MigrateConfig): Translator {
-  if (config.translator === 'api') {
+  if (config.translator === 'api' && config.translatorOptions.endpoint) {
     return new ApiTranslator({
       apiKey: config.translatorOptions.apiKey,
       endpoint: config.translatorOptions.endpoint,

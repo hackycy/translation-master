@@ -1,6 +1,6 @@
 import type { Glossary } from '../glossary'
 import type { MigrateConfig, TranslateResult, Translator } from '../types'
-import { matchGlossary } from '../glossary'
+import { composeGlossaryTranslation, matchGlossary } from '../glossary'
 import { protectPlaceholders, restorePlaceholders } from '../utils/placeholder'
 
 export interface TranslatePipelineInput {
@@ -18,6 +18,7 @@ export async function translateTexts(input: TranslatePipelineInput): Promise<Rec
 
   for (const text of uniqueTexts) {
     const glossaryTranslation = matchGlossary(text, input.glossary, input.filePath)
+      ?? composeGlossaryTranslation(text, input.glossary, input.filePath)
     if (glossaryTranslation) {
       results[text] = {
         source: text,

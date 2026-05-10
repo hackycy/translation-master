@@ -4,6 +4,7 @@ import {
   ApiTranslator,
   createEntry,
   createMapFile,
+  createTranslator,
   DEFAULT_CONFIG,
   defineConfig,
   Extractor,
@@ -16,7 +17,9 @@ import {
   shouldTranslate,
   similarity,
   sourcePathToMapPath,
+  translateTexts,
 } from '../index'
+import { LocalTranslator } from '../translator/local'
 
 function segment(text: string, filePath = 'src/views/login.vue'): TextSegment {
   return {
@@ -56,6 +59,34 @@ describe('i18n migrate architecture primitives', () => {
     expect(protectedText.text).toBe('共 __TM_0__ 条记录，已读 __TM_1__ 条')
     expect(restorePlaceholders('Total __TM_0__ records, __TM_1__ read', protectedText.placeholders))
       .toBe(`Total ${dollarInterpolation} records, {{ read }} read`)
+  })
+
+  it('recovers placeholders even after the model mutates token punctuation', () => {
+    const interpolation = '$' + '{2}'
+
+    expect(restorePlaceholders('您有 TM_ 0 命令待执行', [interpolation]))
+      .toBe(`您有 ${interpolation} 命令待执行`)
+  })
+
+  it('composes short UI copy from glossary terms before machine translation', async () => {
+    const results = await translateTexts({
+      texts: ['Reject current order'],
+      config: defineConfig({ sourceLocale: 'en', targetLocale: 'zh' }),
+      glossary: {
+        'Reject': '拒绝',
+        'current order': '当前订单',
+      },
+      translator: {
+        async translate() {
+          throw new Error('machine translator should not be called')
+        },
+      },
+    })
+
+    expect(results['Reject current order']).toMatchObject({
+      translation: '拒绝当前订单',
+      translationSource: 'glossary',
+    })
   })
 
   it('applies default filter rules and force-pattern precedence', () => {
@@ -137,5 +168,14 @@ describe('i18n migrate architecture primitives', () => {
     finally {
       globalThis.fetch = originalFetch
     }
+  })
+
+  it('falls back to local translation when api mode has no endpoint', () => {
+    const translator = createTranslator(defineConfig({
+      translator: 'api',
+      translatorOptions: { endpoint: '' },
+    }))
+
+    expect(translator).toBeInstanceOf(LocalTranslator)
   })
 })

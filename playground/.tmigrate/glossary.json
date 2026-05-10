@@ -5,6 +5,8 @@
   "Enter customer name": "请输入客户名称",
   "Approve": "通过",
   "Reject": "拒绝",
+  "current order": "当前订单",
+  "orders": "订单",
   "Pending review": "待审核",
   "Ready to ship": "待发货"
 }

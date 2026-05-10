@@ -20,7 +20,20 @@ export function protectPlaceholders(text: string): ProtectedText {
 }
 
 export function restorePlaceholders(text: string, placeholders: string[]): string {
-  return text.replace(/__TM_(\d+)__/g, (match, index: string) => {
+  let restored = text.replace(/__TM_(\d+)__/g, (match, index: string) => {
     return placeholders[Number(index)] ?? match
   })
+
+  for (let index = 0; index < placeholders.length; index++) {
+    const placeholder = placeholders[index]
+    const pattern = buildPlaceholderPattern(index)
+    restored = restored.replace(pattern, placeholder)
+  }
+
+  return restored
+}
+
+function buildPlaceholderPattern(index: number): RegExp {
+  const escapedIndex = String(index).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(?:__+)?T[\\W_]*M[\\W_]*${escapedIndex}(?:__+)?`, 'giu')
 }

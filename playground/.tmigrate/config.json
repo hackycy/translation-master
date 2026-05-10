@@ -53,9 +53,9 @@
       "value": 2
     }
   ],
-  "translator": "api",
+  "translator": "local",
   "translatorOptions": {
-    "modelBaseUrl": "https://cdn.example.com/models",
+    "modelBaseUrl": "",
     "apiKey": "",
     "endpoint": "",
     "timeout": 30000,
