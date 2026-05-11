@@ -66,6 +66,9 @@ function extractHtmlAttrs(content: string, filePath: string, offset: number): Ra
 }
 
 function extractTextParts(content: string, raw: string, rawStart: number, offset: number, context: TextContext): RangeSegment[] {
+  if (hasInterpolation(raw))
+    return createTextPartSegments(content, raw, rawStart, offset, context)
+
   const segments: RangeSegment[] = []
   const interpolationRe = /\{\{[\s\S]*?\}\}/g
   let cursor = 0
@@ -78,6 +81,10 @@ function extractTextParts(content: string, raw: string, rawStart: number, offset
 
   segments.push(...createTextPartSegments(content, raw.slice(cursor), rawStart + cursor, offset, context))
   return segments
+}
+
+function hasInterpolation(text: string): boolean {
+  return /\{\{[\s\S]*?\}\}/.test(text)
 }
 
 function createTextPartSegments(content: string, textPart: string, partStart: number, offset: number, context: TextContext): RangeSegment[] {

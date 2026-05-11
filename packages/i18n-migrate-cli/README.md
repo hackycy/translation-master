@@ -378,10 +378,14 @@ import { parse } from '@vue/compiler-sfc'
 
 const { descriptor } = parse(content, { sourceMap: true })
 
-// template → HTML parser，提取文本节点和属性
+// template → HTML parser，提取文本节点和属性；含 Vue 插值的混合文本按整句提取
 // script / script-setup → TS/JS parser
 // style → 只处理 content: "中文" 属性
 ```
+
+Template 文本节点里的 Vue 插值采用整句提取策略：`{{ owner }} has orders waiting for approval`
+会作为一个完整文本段进入翻译流水线，`{{ owner }}` 在翻译前被替换为占位符，翻译后再还原。纯表达式
+如 `<p>{{ owner }}</p>` 不包含源语言可见文本，会被过滤规则跳过。
 
 ## 占位符保护
 
@@ -398,6 +402,9 @@ const { descriptor } = parse(content, { sourceMap: true })
 - Vue 模板：`{{ expression }}`
 - JS 模板字面量：`${expression}`
 - 自定义占位符：通过配置扩展
+
+占位符保护发生在机器翻译前，因此 `${owner}`、`${2}`、`{{ owner }}` 这类表达式会整体保留；
+即使表达式内部是英文变量名，也不会被模型当作普通英文单词翻译。
 
 ## 哪些中文该翻译，哪些不该
 
@@ -631,7 +638,7 @@ interface TranslateResult {
 2. 将剩余待机器翻译文本按 `batchSize` 分片
 3. 按 `concurrency` 并发调用 Translator，并通过 `onProgress` 上报批次进度
 4. 失败时按 `retries` 重试，超过重试次数的批次标记为失败
-5. 对含插值的文本，先调用 `placeholder.ts` 保护，翻译后再还原
+5. 对含插值的文本，先调用 `placeholder.ts` 保护，翻译后再还原；Vue template 混合文本同样走这条路径
 6. 本地翻译器通过 `@translation-master/node` 的 `modelLoad` 事件向 CLI 上报模型加载进度
 
 ## 依赖

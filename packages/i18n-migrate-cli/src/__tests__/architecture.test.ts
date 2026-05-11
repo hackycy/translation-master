@@ -148,14 +148,25 @@ describe('i18n migrate architecture primitives', () => {
     expect(shouldTranslate({ text: '订单管理', context: 'template', sourceLocale: 'en' }, config.rules)).toBe(false)
   })
 
-  it('does not include Vue interpolation expressions in template text segments', () => {
+  it('keeps Vue interpolation expressions in mixed template text segments', () => {
     const extractor = new Extractor(defineConfig({ sourceLocale: 'zh', targetLocale: 'en' }))
     const segments = extractor.extract(
       '<template><p>{{ owner }} 的订单需要人工审核</p></template>',
       'src/views/Order.vue',
     )
 
-    expect(segments.map(segment => segment.text)).toEqual(['的订单需要人工审核'])
+    expect(segments.map(segment => segment.text)).toEqual(['{{ owner }} 的订单需要人工审核'])
+    expect(segments[0]?.interpolation?.segments).toEqual(['{{ owner }}'])
+  })
+
+  it('skips pure Vue interpolation expressions in template text segments', () => {
+    const extractor = new Extractor(defineConfig({ sourceLocale: 'en', targetLocale: 'zh' }))
+    const segments = extractor.extract(
+      '<template><p>{{ owner }}</p></template>',
+      'src/views/Order.vue',
+    )
+
+    expect(segments).toEqual([])
   })
 
   it('creates glossary entries as approved and marks missing texts deprecated on merge', () => {
