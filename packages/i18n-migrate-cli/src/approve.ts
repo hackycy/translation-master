@@ -10,8 +10,18 @@ export async function approveTranslations(options: ApproveOptions = {}): Promise
   const cwd = options.cwd ?? process.cwd()
   const mapPaths = await findMapPaths(cwd, options.path)
   const files: ApproveResult['files'] = []
+  options.onProgress?.({ phase: 'prepare', message: options.dryRun ? 'Preparing approval preview' : 'Preparing to approve map entries' })
+  options.onProgress?.({ phase: 'discover', message: `Found ${mapPaths.length} map file(s)`, total: mapPaths.length })
 
-  for (const mapPath of mapPaths) {
+  for (const [index, mapPath] of mapPaths.entries()) {
+    options.onProgress?.({
+      phase: 'file',
+      path: mapPathToSourcePath(mapPath),
+      current: index + 1,
+      total: mapPaths.length,
+      action: 'approve',
+      dryRun: options.dryRun,
+    })
     const absolutePath = path.join(cwd, mapPath)
     const mapFile = await readJsonFile(absolutePath, createMapFile())
     let approved = 0
@@ -32,8 +42,16 @@ export async function approveTranslations(options: ApproveOptions = {}): Promise
     }
 
     const changed = approved > 0
-    if (changed && !options.dryRun)
+    if (changed && !options.dryRun) {
       await writeJsonFile(absolutePath, mapFile)
+      options.onProgress?.({
+        phase: 'write',
+        path: mapPathToSourcePath(mapPath),
+        current: index + 1,
+        total: mapPaths.length,
+        action: 'approve',
+      })
+    }
 
     files.push({
       sourcePath: mapPathToSourcePath(mapPath),
@@ -46,6 +64,7 @@ export async function approveTranslations(options: ApproveOptions = {}): Promise
     })
   }
 
+  options.onProgress?.({ phase: 'done', message: 'Approve finished' })
   return { files, dryRun: options.dryRun === true }
 }
 

@@ -1,4 +1,4 @@
-import type { ScanProgressEvent } from './types'
+import type { ScanProgressEvent, WorkflowProgressEvent } from './types'
 import process from 'node:process'
 import { Command } from 'commander'
 import pc from 'picocolors'
@@ -70,13 +70,16 @@ export function createCli(options: CreateCliOptions): Command {
       includeDeprecated?: boolean
       allowEmpty?: boolean
     }) => {
+      const progress = createWorkflowProgressRenderer('approve')
       const result = await approveTranslations({
         dryRun: command.dryRun,
         path: command.path,
         includeSkipped: command.includeSkipped,
         includeDeprecated: command.includeDeprecated,
         allowEmpty: command.allowEmpty,
+        onProgress: progress.update,
       })
+      progress.stop('Approve finished.')
       const approved = result.files.reduce((sum, file) => sum + file.approved, 0)
       const changed = result.files.filter(file => file.changed).length
       const skipped = result.files.reduce((sum, file) => sum + file.skipped, 0)
@@ -91,10 +94,13 @@ export function createCli(options: CreateCliOptions): Command {
     .option('--dry-run', 'print a diff without writing files')
     .option('--path <path>', 'limit apply to a file or directory')
     .action(async (command: { dryRun?: boolean, path?: string }) => {
+      const progress = createWorkflowProgressRenderer('apply')
       const result = await applyTranslations({
         dryRun: command.dryRun,
         path: command.path,
+        onProgress: progress.update,
       })
+      progress.stop('Apply finished.')
       for (const file of result.files) {
         if (file.diff)
           console.log(file.diff)
@@ -109,10 +115,13 @@ export function createCli(options: CreateCliOptions): Command {
     .option('--path <path>', 'restore a specific file')
     .option('--list', 'list available backups')
     .action(async (command: { path?: string, list?: boolean }) => {
+      const progress = createWorkflowProgressRenderer('restore')
       const result = await restoreBackups({
         path: command.path,
         list: command.list,
+        onProgress: progress.update,
       })
+      progress.stop('Restore finished.')
       if (command.list) {
         for (const entry of result.available)
           console.log(`${entry.sourcePath}\t${entry.backedUpAt}`)
@@ -213,6 +222,67 @@ function createScanProgressRenderer(): { update: (event: ScanProgressEvent) => v
         spinner.stop(message)
     },
   }
+}
+
+function createWorkflowProgressRenderer(_action: 'approve' | 'apply' | 'restore'): { update: (event: WorkflowProgressEvent) => void, stop: (message: string) => void } {
+  const spinner = createSpinner()
+  let started = false
+  let finished = false
+  let lastMessage = ''
+
+  const startOrUpdate = (message: string) => {
+    if (finished || message === lastMessage)
+      return
+    lastMessage = message
+    if (started) {
+      spinner.message(message)
+      return
+    }
+    spinner.start(message)
+    started = true
+  }
+
+  return {
+    update(event) {
+      if (event.phase === 'prepare') {
+        startOrUpdate(event.message)
+        return
+      }
+      if (event.phase === 'discover') {
+        startOrUpdate(event.message)
+        return
+      }
+      if (event.phase === 'file') {
+        const prefix = actionLabel(event.action)
+        const dryRun = event.dryRun ? ' preview' : ''
+        startOrUpdate(`${prefix}${dryRun}: ${event.path} (${event.current}/${event.total})`)
+        return
+      }
+      if (event.phase === 'write') {
+        const prefix = actionLabel(event.action)
+        startOrUpdate(`${prefix}: ${event.path} (${event.current}/${event.total})`)
+        return
+      }
+      if (event.phase === 'done') {
+        startOrUpdate(event.message)
+      }
+    },
+    stop(message) {
+      if (finished)
+        return
+      finished = true
+      if (started)
+        spinner.stop(message)
+    },
+  }
+}
+
+function actionLabel(action: 'approve' | 'apply' | 'restore'): string {
+  if (action === 'approve')
+    return 'Approving'
+  if (action === 'apply')
+    return 'Applying'
+  return 'Restoring'
 }
 
 function formatModelLoadMessage(

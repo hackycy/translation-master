@@ -158,6 +158,7 @@ export interface ApplyOptions {
   cwd?: string
   path?: string
   dryRun?: boolean
+  onProgress?: (event: WorkflowProgressEvent) => void
 }
 
 export interface FileChange {
@@ -179,6 +180,7 @@ export interface ApproveOptions {
   includeSkipped?: boolean
   includeDeprecated?: boolean
   allowEmpty?: boolean
+  onProgress?: (event: WorkflowProgressEvent) => void
 }
 
 export interface ApproveFileChange {
@@ -200,9 +202,17 @@ export interface RestoreOptions {
   cwd?: string
   path?: string
   list?: boolean
+  onProgress?: (event: WorkflowProgressEvent) => void
 }
 
 export interface RestoreResult {
   restored: string[]
   available: BackupMetaEntry[]
 }
+
+export type WorkflowProgressEvent
+  = | { phase: 'prepare', message: string }
+    | { phase: 'discover', message: string, total?: number }
+    | { phase: 'file', path: string, current: number, total: number, action: 'approve' | 'apply' | 'restore', dryRun?: boolean }
+    | { phase: 'write', path: string, current: number, total: number, action: 'approve' | 'apply' | 'restore' }
+    | { phase: 'done', message: string }

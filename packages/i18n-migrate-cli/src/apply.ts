@@ -13,14 +13,24 @@ import { createUnifiedDiff } from './reporter'
 
 export async function applyTranslations(options: ApplyOptions = {}): Promise<ApplyResult> {
   const cwd = options.cwd ?? process.cwd()
+  options.onProgress?.({ phase: 'prepare', message: options.dryRun ? 'Preparing preview of approved translations' : 'Preparing to apply approved translations' })
   const config = await loadConfig(cwd)
   const extractor = new Extractor(config)
   const replacer = new Replacer()
   const sourcePaths = await findMappedSourcePaths(cwd, options.path)
   const batchId = new Date().toISOString()
   const files: ApplyResult['files'] = []
+  options.onProgress?.({ phase: 'discover', message: `Found ${sourcePaths.length} source file(s) with maps`, total: sourcePaths.length })
 
-  for (const sourcePath of sourcePaths) {
+  for (const [index, sourcePath] of sourcePaths.entries()) {
+    options.onProgress?.({
+      phase: 'file',
+      path: sourcePath,
+      current: index + 1,
+      total: sourcePaths.length,
+      action: 'apply',
+      dryRun: options.dryRun,
+    })
     const absolutePath = path.join(cwd, sourcePath)
     const content = await readFile(absolutePath, 'utf8')
     const mapFile = await readMapFile(cwd, sourcePath)
@@ -34,6 +44,7 @@ export async function applyTranslations(options: ApplyOptions = {}): Promise<App
     if (changed && !options.dryRun) {
       await backupFile(cwd, sourcePath, batchId)
       await writeFile(absolutePath, next, 'utf8')
+      options.onProgress?.({ phase: 'write', path: sourcePath, current: index + 1, total: sourcePaths.length, action: 'apply' })
     }
 
     files.push({
@@ -44,23 +55,41 @@ export async function applyTranslations(options: ApplyOptions = {}): Promise<App
     })
   }
 
+  options.onProgress?.({ phase: 'done', message: 'Apply finished' })
   return { files, dryRun: options.dryRun === true }
 }
 
 export async function restoreBackups(options: RestoreOptions = {}): Promise<RestoreResult> {
   const cwd = options.cwd ?? process.cwd()
+  options.onProgress?.({ phase: 'prepare', message: options.list ? 'Loading backup list' : 'Preparing restore' })
   const meta = await loadBackupMeta(cwd)
   const available = listBackupEntries(meta, options.path)
+  options.onProgress?.({ phase: 'discover', message: `Found ${available.length} backup entr${available.length === 1 ? 'y' : 'ies'}`, total: available.length })
 
   if (options.list)
     return { restored: [], available }
 
   const restored: string[] = []
-  for (const entry of available) {
+  for (const [index, entry] of available.entries()) {
+    options.onProgress?.({
+      phase: 'file',
+      path: entry.sourcePath,
+      current: index + 1,
+      total: available.length,
+      action: 'restore',
+    })
     await copyFile(path.join(cwd, entry.backupPath), path.join(cwd, entry.sourcePath))
     restored.push(entry.sourcePath)
+    options.onProgress?.({
+      phase: 'write',
+      path: entry.sourcePath,
+      current: index + 1,
+      total: available.length,
+      action: 'restore',
+    })
   }
 
+  options.onProgress?.({ phase: 'done', message: 'Restore finished' })
   return { restored, available }
 }
 
