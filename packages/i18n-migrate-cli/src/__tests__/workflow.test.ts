@@ -191,6 +191,22 @@ describe('i18n migrate workflow', () => {
     expect(seeded.entries.Search).toBe('搜索')
   })
 
+  it('initializes chrome translator config in non-interactive mode', async () => {
+    const cwd = await createTempProject()
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en', translator: 'chrome' })
+
+    const config = JSON.parse(await readFile(path.join(cwd, '.tmigrate', 'config.json'), 'utf8')) as {
+      translator: string
+      translatorOptions: Record<string, unknown>
+    }
+
+    expect(config.translator).toBe('chrome')
+    expect(config.translatorOptions).toMatchObject({
+      chromeChannel: 'chrome',
+      chromeHeadless: false,
+    })
+  })
+
   it('summarizes map progress and flags orphaned files', async () => {
     const cwd = await createTempProject()
     const appPath = path.join(cwd, 'src', 'App.vue')

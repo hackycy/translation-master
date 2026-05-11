@@ -30,11 +30,13 @@ export function createCli(options: CreateCliOptions): Command {
     .option('-y, --yes', 'skip prompts and use defaults')
     .option('--from <locale>', 'source locale')
     .option('--to <locale>', 'target locale')
+    .option('--translator <backend>', 'translation backend: local, api, chrome')
     .option('--no-overwrite', 'preserve existing files')
-    .action(async (command: { interactive?: boolean, yes?: boolean, from?: string, to?: string, overwrite?: boolean }) => {
+    .action(async (command: { interactive?: boolean, yes?: boolean, from?: string, to?: string, translator?: string, overwrite?: boolean }) => {
       const interactive = command.yes ? false : command.interactive ?? Boolean(process.stdin.isTTY)
       const result = await initProject({
         ...command,
+        translator: normalizeInitTranslator(command.translator),
         interactive,
       })
       console.log(pc.green(`Initialized .tmigrate (${result.created.length} created, ${result.skipped.length} skipped).`))
@@ -175,6 +177,14 @@ export function createCli(options: CreateCliOptions): Command {
     })
 
   return program
+}
+
+function normalizeInitTranslator(value: string | undefined): 'local' | 'api' | 'chrome' | undefined {
+  if (!value)
+    return undefined
+  if (value === 'local' || value === 'api' || value === 'chrome')
+    return value
+  throw new Error(`Unsupported translator "${value}". Expected local, api, or chrome.`)
 }
 
 type ScanCommandOptions = Parameters<typeof scanProject>[0]

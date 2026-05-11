@@ -10,6 +10,7 @@ export interface InitOptions {
   cwd?: string
   from?: string
   to?: string
+  translator?: MigrateConfig['translator']
   overwrite?: boolean
   interactive?: boolean
 }
@@ -38,6 +39,7 @@ export async function initProject(options: InitOptions = {}): Promise<InitResult
   const seed = {
     sourceLocale: options.from ?? DEFAULT_CONFIG.sourceLocale,
     targetLocale: options.to ?? DEFAULT_CONFIG.targetLocale,
+    ...(options.translator ? { translator: options.translator } : {}),
   }
   const configInput = options.interactive
     ? await promptInitConfig(seed)

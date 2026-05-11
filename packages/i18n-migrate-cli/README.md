@@ -72,6 +72,7 @@ tmigrate init
 tmigrate init --yes
 tmigrate init --from zh --to en
 tmigrate init --from en --to zh --no-overwrite
+tmigrate init --translator chrome
 ```
 
 常用选项：
@@ -82,6 +83,7 @@ tmigrate init --from en --to zh --no-overwrite
 | `--yes` | 跳过提示，直接使用默认配置 |
 | `--from <locale>` | 源语言，如 `zh`、`en` |
 | `--to <locale>` | 目标语言，如 `en`、`zh` |
+| `--translator <backend>` | 翻译后端：`local`、`api`、`chrome` |
 | `--no-overwrite` | 只创建缺失文件，不覆盖已有配置 |
 
 ### `scan`

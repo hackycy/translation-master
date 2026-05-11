@@ -91,10 +91,25 @@ export async function promptInitConfig(defaults: MigrateConfigInput): Promise<Mi
   })
   assertPromptValue(sourceRoot)
 
+  const translator = await select({
+    message: 'Translation backend',
+    initialValue: defaults.translator ?? 'local',
+    options: [
+      { value: 'local', label: 'Local ONNX model' },
+      { value: 'api', label: 'HTTP API endpoint' },
+      { value: 'chrome', label: 'Chrome built-in Translator API' },
+    ],
+  })
+  assertPromptValue(translator)
+
+  const translatorOptions = await promptTranslatorOptions(translator, defaults)
+
   return {
     sourceLocale,
     targetLocale,
     include: [`${sourceRoot}/**/*.{${expandFileTypes(fileTypes).join(',')}}`],
+    translator,
+    ...(translatorOptions ? { translatorOptions } : {}),
   }
 }
 
@@ -157,4 +172,68 @@ function expandFileTypes(types: string[]): string[] {
       return ['yaml', 'yml']
     return [type]
   })
+}
+
+async function promptTranslatorOptions(
+  translator: NonNullable<MigrateConfigInput['translator']>,
+  defaults: MigrateConfigInput,
+): Promise<MigrateConfigInput['translatorOptions'] | undefined> {
+  if (translator === 'local') {
+    const modelBaseUrl = await text({
+      message: 'Model base URL or path',
+      initialValue: defaults.translatorOptions?.modelBaseUrl ?? '',
+      placeholder: 'Leave empty to use the default HuggingFace model source',
+    })
+    assertPromptValue(modelBaseUrl)
+
+    return typeof modelBaseUrl === 'string' && modelBaseUrl.trim()
+      ? { modelBaseUrl: modelBaseUrl.trim() }
+      : undefined
+  }
+
+  if (translator === 'api') {
+    const endpoint = await text({
+      message: 'Translation API endpoint',
+      initialValue: defaults.translatorOptions?.endpoint ?? '',
+      placeholder: 'https://translator.example.com/translate',
+    })
+    assertPromptValue(endpoint)
+
+    const apiKey = await text({
+      message: 'API key',
+      initialValue: defaults.translatorOptions?.apiKey ?? '',
+      placeholder: 'Leave empty if the endpoint does not require a token',
+    })
+    assertPromptValue(apiKey)
+
+    return {
+      endpoint: endpoint.trim(),
+      apiKey: apiKey.trim(),
+    }
+  }
+
+  const chromeChannel = await select({
+    message: 'Chrome channel',
+    initialValue: defaults.translatorOptions?.chromeChannel ?? 'chrome',
+    options: [
+      { value: 'chrome', label: 'Stable Chrome' },
+      { value: 'chrome-beta', label: 'Chrome Beta' },
+      { value: 'chrome-dev', label: 'Chrome Dev' },
+      { value: 'chrome-canary', label: 'Chrome Canary' },
+    ],
+  })
+  assertPromptValue(chromeChannel)
+
+  const chromeExecutablePath = await text({
+    message: 'Chrome executable path',
+    initialValue: defaults.translatorOptions?.chromeExecutablePath ?? '',
+    placeholder: 'Leave empty to use the selected Chrome channel',
+  })
+  assertPromptValue(chromeExecutablePath)
+
+  return {
+    chromeChannel,
+    chromeExecutablePath: chromeExecutablePath.trim(),
+    chromeHeadless: false,
+  }
 }
