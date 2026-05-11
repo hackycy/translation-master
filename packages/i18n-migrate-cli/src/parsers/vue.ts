@@ -29,7 +29,7 @@ export function extractVueSegments(content: string, filePath: string): RangeSegm
   for (const block of [descriptor.script, descriptor.scriptSetup]) {
     if (block) {
       const offset = block.loc.start.offset
-      segments.push(...extractScriptSegments(block.content, filePath, 'script', offset))
+      segments.push(...extractScriptSegments(block.content, scriptBlockPath(filePath, block.lang), 'script', offset))
     }
   }
 
@@ -46,6 +46,14 @@ export function extractVueSegments(content: string, filePath: string): RangeSegm
       column: position.column,
     }
   })
+}
+
+function scriptBlockPath(filePath: string, lang?: string): string {
+  if (lang === 'tsx')
+    return `${filePath}.tsx`
+  if (lang === 'jsx')
+    return `${filePath}.jsx`
+  return filePath
 }
 
 interface VueTemplateNode {

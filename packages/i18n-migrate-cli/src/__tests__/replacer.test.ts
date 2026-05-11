@@ -132,6 +132,29 @@ describe('replacer syntax-aware writeback', () => {
     ])).toContain('<template v-if="fileMax > 1">with maximum uploads of {{ fileMax }}</template>')
   })
 
+  it('extracts and replaces column titles in Vue TSX script setup blocks', () => {
+    const content = [
+      '<template><BasicTable /></template>',
+      '<script lang="tsx" setup>',
+      'const columns = [',
+      '  { title: "所属景区", dataIndex: "scenicName" },',
+      '  {',
+      '    title: "订单类型",',
+      '    customRender: ({ text }) => <Tag>{text === 1 ? "团队" : "个人"}</Tag>,',
+      '  },',
+      ']',
+      '</script>',
+    ].join('\n')
+    const extractor = new Extractor(config)
+    const segments = extractor.extract(content, 'src/Columns.vue')
+
+    expect(segments.map(segment => segment.text)).toEqual(['所属景区', '订单类型', '团队', '个人'])
+    expect(replace(content, 'src/Columns.vue', [
+      ['所属景区', 'Scenic Area'],
+      ['订单类型', 'Order Type'],
+    ])).toContain('{ title: "Scenic Area", dataIndex: "scenicName" }')
+  })
+
   it('keeps HTML text ranges after attributes containing greater-than signs', () => {
     const content = '<div><template data-test="fileMax > 1">最大上传{{ fileMax }}张图片</template></div>'
     const extractor = new Extractor(config)
