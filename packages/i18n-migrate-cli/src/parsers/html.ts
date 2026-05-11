@@ -15,7 +15,7 @@ export const htmlParser: FileParser = {
 export function extractHtmlSegments(content: string, filePath: string, offset = 0, textContext: TextContext = 'html-text'): RangeSegment[] {
   return [
     ...extractHtmlText(content, filePath, offset, textContext),
-    ...extractHtmlAttrs(content, filePath, offset),
+    ...extractHtmlAttrSegments(content, filePath, offset),
   ]
 }
 
@@ -23,20 +23,28 @@ function extractHtmlText(content: string, filePath: string, offset: number, cont
   const segments: RangeSegment[] = []
   let cursor = 0
   while (cursor < content.length) {
-    const startTagEnd = content.indexOf('>', cursor)
+    const startTagStart = content.indexOf('<', cursor)
+    if (startTagStart === -1)
+      break
+
+    const startTagEnd = findTagEnd(content, startTagStart)
     if (startTagEnd === -1)
       break
+
     const endTagStart = content.indexOf('<', startTagEnd + 1)
-    if (endTagStart === -1)
+    if (endTagStart === -1) {
+      segments.push(...extractTextParts(content, content.slice(startTagEnd + 1), startTagEnd + 1, offset, context))
       break
+    }
+
     const raw = content.slice(startTagEnd + 1, endTagStart)
     segments.push(...extractTextParts(content, raw, startTagEnd + 1, offset, context))
-    cursor = endTagStart + 1
+    cursor = endTagStart
   }
   return dedupeSegments(segments, filePath)
 }
 
-function extractHtmlAttrs(content: string, filePath: string, offset: number): RangeSegment[] {
+export function extractHtmlAttrSegments(content: string, filePath: string, offset: number): RangeSegment[] {
   const attrNames = new Set(['title', 'alt', 'placeholder', 'aria-label', 'label'])
   const segments: RangeSegment[] = []
   const attrRe = /\s([\w-]+)=["'][^"']*["']/g
@@ -104,4 +112,27 @@ function createTextPartSegments(content: string, textPart: string, partStart: nu
     context,
     nodeType: 'Text',
   }]
+}
+
+function findTagEnd(content: string, start: number): number {
+  let quote: string | undefined
+
+  for (let index = start + 1; index < content.length; index++) {
+    const char = content[index]
+    if (quote) {
+      if (char === quote)
+        quote = undefined
+      continue
+    }
+
+    if (char === '\'' || char === '"') {
+      quote = char
+      continue
+    }
+
+    if (char === '>')
+      return index
+  }
+
+  return -1
 }

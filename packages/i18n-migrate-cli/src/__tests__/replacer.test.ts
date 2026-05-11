@@ -115,6 +115,34 @@ describe('replacer syntax-aware writeback', () => {
     ])).toBe('.badge::after { content: "Account \\"secure\\"\\A ready"; }')
   })
 
+  it('uses Vue template ranges when directive values contain greater-than signs', () => {
+    const content = [
+      '<template>',
+      '  <div v-if="showTips">',
+      '    <template v-if="fileMax > 1">，最大上传{{ fileMax }}张图片</template>',
+      '  </div>',
+      '</template>',
+    ].join('\n')
+    const extractor = new Extractor(config)
+    const segments = extractor.extract(content, 'src/JImageUpload.vue')
+
+    expect(segments.map(segment => segment.text)).toEqual(['，最大上传{{ fileMax }}张图片'])
+    expect(replace(content, 'src/JImageUpload.vue', [
+      ['，最大上传{{ fileMax }}张图片', 'with maximum uploads of {{ fileMax }}'],
+    ])).toContain('<template v-if="fileMax > 1">with maximum uploads of {{ fileMax }}</template>')
+  })
+
+  it('keeps HTML text ranges after attributes containing greater-than signs', () => {
+    const content = '<div><template data-test="fileMax > 1">最大上传{{ fileMax }}张图片</template></div>'
+    const extractor = new Extractor(config)
+    const segments = extractor.extract(content, 'src/template.html')
+
+    expect(segments.map(segment => segment.text)).toEqual(['最大上传{{ fileMax }}张图片'])
+    expect(replace(content, 'src/template.html', [
+      ['最大上传{{ fileMax }}张图片', 'Maximum uploads {{ fileMax }} images'],
+    ])).toContain('data-test="fileMax > 1">Maximum uploads {{ fileMax }} images</template>')
+  })
+
   it('quotes unsafe yaml translations and preserves quoted yaml scalars', () => {
     expect(replace('title: 账号安全\n', 'src/messages.yaml', [
       ['账号安全', 'Account: secure #1'],
