@@ -239,4 +239,17 @@ describe('i18n migrate architecture primitives', () => {
 
     expect(translator).toBeInstanceOf(LocalTranslator)
   })
+
+  it('creates lazy chrome translator for chrome mode', () => {
+    const translator = createTranslator(defineConfig({
+      translator: 'chrome',
+      translatorOptions: {
+        timeout: 1000,
+        retries: 1,
+        concurrency: 1,
+      },
+    }))
+
+    expect(translator.constructor.name).toBe('LazyChromeTranslator')
+  })
 })

@@ -85,6 +85,11 @@ export interface TranslatorOptions {
   modelBaseUrl?: string
   apiKey?: string
   endpoint?: string
+  chromeChannel?: string
+  chromeExecutablePath?: string
+  chromeHeadless?: boolean
+  chromeUserDataDir?: string
+  chromeKeepAlive?: boolean
   timeout: number
   retries: number
   concurrency: number
@@ -100,7 +105,7 @@ export interface MigrateConfig {
   include: string[]
   exclude: string[]
   rules: FilterRule[]
-  translator: 'local' | 'api'
+  translator: 'local' | 'api' | 'chrome'
   translatorOptions: TranslatorOptions
   glossaryPresets?: GlossaryPresetSourceConfig
   batchSize: number
@@ -121,6 +126,7 @@ export interface TranslateResult {
 
 export interface Translator {
   translate: (texts: string[], options: TranslateOptions) => Promise<TranslateResult[]>
+  dispose?: () => Promise<void>
 }
 
 export interface FileParser {

@@ -35,63 +35,69 @@ export async function scanProject(options: ScanOptions = {}): Promise<ScanResult
   const result: ScanResult = { scannedFiles: 0, skippedFiles: 0, extractedTexts: 0, mapFiles: [] }
   options.onProgress?.({ phase: 'discover', message: `Discovered ${files.length} source file(s)`, totalFiles: files.length })
 
-  for (const [index, sourcePath] of files.entries()) {
-    options.onProgress?.({ phase: 'file', filePath: sourcePath, current: index + 1, total: files.length })
-    const absolutePath = path.join(cwd, sourcePath)
-    const hash = await hashFile(absolutePath)
-    const previousMeta = scanMeta[sourcePath]
+  try {
+    for (const [index, sourcePath] of files.entries()) {
+      options.onProgress?.({ phase: 'file', filePath: sourcePath, current: index + 1, total: files.length })
+      const absolutePath = path.join(cwd, sourcePath)
+      const hash = await hashFile(absolutePath)
+      const previousMeta = scanMeta[sourcePath]
 
-    if (options.incremental && previousMeta?.hash === hash) {
-      if (options.cleanDeprecated) {
-        const previousMap = await readMapFile(cwd, sourcePath)
-        const cleanedEntries = Object.fromEntries(
-          Object.entries(previousMap.entries).filter(([, entry]) => !entry.deprecated),
-        )
-        await writeMapFile(cwd, sourcePath, { ...previousMap, generatedAt: new Date().toISOString(), entries: cleanedEntries })
+      if (options.incremental && previousMeta?.hash === hash) {
+        if (options.cleanDeprecated) {
+          const previousMap = await readMapFile(cwd, sourcePath)
+          const cleanedEntries = Object.fromEntries(
+            Object.entries(previousMap.entries).filter(([, entry]) => !entry.deprecated),
+          )
+          await writeMapFile(cwd, sourcePath, { ...previousMap, generatedAt: new Date().toISOString(), entries: cleanedEntries })
+        }
+        result.skippedFiles++
+        continue
       }
-      result.skippedFiles++
-      continue
+
+      const content = await readFile(absolutePath, 'utf8')
+      const segments = extractor.extract(content, sourcePath)
+      const previousMap = await readMapFile(cwd, sourcePath)
+      const translationResults = await translateTexts({
+        texts: segments.map(segment => segment.text),
+        filePath: sourcePath,
+        config,
+        glossary,
+        translator,
+        onProgress(event) {
+          options.onProgress?.({ phase: 'translate', filePath: sourcePath, ...event })
+        },
+      })
+      const nextEntries: Record<string, TranslationEntry> = {}
+
+      for (const segment of segments) {
+        const translated = translationResults[segment.text]
+        nextEntries[segment.text] = createEntry(
+          segment,
+          translated?.translation ?? '',
+          translated?.translationSource ?? 'machine',
+        )
+      }
+
+      const merged = mergeMapEntries(previousMap, segments, nextEntries, {
+        cleanDeprecated: options.cleanDeprecated,
+      })
+      const mapFile = await writeMapFile(cwd, sourcePath, merged)
+
+      scanMeta[sourcePath] = {
+        hash,
+        lastScanned: new Date().toISOString(),
+        mapFile: sourcePathToMapPath(sourcePath).replace('.tmigrate/maps/', ''),
+      }
+
+      options.onProgress?.({ phase: 'write', filePath: sourcePath, current: index + 1, total: files.length })
+      result.scannedFiles++
+      result.extractedTexts += segments.length
+      result.mapFiles.push(mapFile)
     }
-
-    const content = await readFile(absolutePath, 'utf8')
-    const segments = extractor.extract(content, sourcePath)
-    const previousMap = await readMapFile(cwd, sourcePath)
-    const translationResults = await translateTexts({
-      texts: segments.map(segment => segment.text),
-      filePath: sourcePath,
-      config,
-      glossary,
-      translator,
-      onProgress(event) {
-        options.onProgress?.({ phase: 'translate', filePath: sourcePath, ...event })
-      },
-    })
-    const nextEntries: Record<string, TranslationEntry> = {}
-
-    for (const segment of segments) {
-      const translated = translationResults[segment.text]
-      nextEntries[segment.text] = createEntry(
-        segment,
-        translated?.translation ?? '',
-        translated?.translationSource ?? 'machine',
-      )
-    }
-
-    const merged = mergeMapEntries(previousMap, segments, nextEntries, {
-      cleanDeprecated: options.cleanDeprecated,
-    })
-    const mapFile = await writeMapFile(cwd, sourcePath, merged)
-
-    scanMeta[sourcePath] = {
-      hash,
-      lastScanned: new Date().toISOString(),
-      mapFile: sourcePathToMapPath(sourcePath).replace('.tmigrate/maps/', ''),
-    }
-
-    options.onProgress?.({ phase: 'write', filePath: sourcePath, current: index + 1, total: files.length })
-    result.scannedFiles++
-    result.extractedTexts += segments.length
-    result.mapFiles.push(mapFile)
+  }
+  finally {
+    if (!options.translator)
+      await translator.dispose?.()
   }
 
   await saveScanMeta(cwd, scanMeta)

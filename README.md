@@ -9,6 +9,7 @@
 | [`@translation-master/core`](./packages/core) | 运行时无关的翻译核心 | 任意 |
 | [`@translation-master/browser`](./packages/browser) | 浏览器翻译，支持 DOM 翻译、WebGPU、Web Worker | 浏览器 |
 | [`@translation-master/node`](./packages/node) | Node.js 翻译，使用 ONNX Runtime | Node.js |
+| [`@translation-master/chrome`](./packages/chrome) | 通过 Chrome 内置 Translator API 翻译 | 桌面 Chrome |
 | [`@translation-master/vite-plugin`](./packages/vite-plugin) | Vite 插件，注入 translate.js | 构建工具 |
 
 ## 架构
@@ -34,6 +35,11 @@
 │  Toast UI           │   │                     │
 │  BrowserCacheAdapter│   │                     │
 └─────────────────────┘   └─────────────────────┘
+
+┌─────────────────────────────────────────────────┐
+│            @translation-master/chrome            │
+│  (bridges Node.js to Chrome Translator API)      │
+└─────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────┐
 │          @translation-master/vite-plugin         │
@@ -69,6 +75,10 @@
 - **CPU 设备** — 使用 `onnxruntime-node` 进行推理
 - **FileCacheAdapter** — 基于文件系统的缓存，SHA-256 哈希文件名
 - 自动配置 `transformersLoader`（无需手动设置）
+
+### Chrome (`@translation-master/chrome`)
+
+通过 `playwright-core` 启动桌面 Chrome / Chromium 页面，并调用浏览器内置 `Translator` API。适合本地批量迁移时用浏览器翻译能力替代本地小模型。
 
 ### Vite 插件 (`@translation-master/vite-plugin`)
 

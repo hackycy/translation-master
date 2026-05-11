@@ -1,8 +1,8 @@
 {
-  "name": "@translation-master/i18n-migrate-cli",
+  "name": "@translation-master/chrome",
   "type": "module",
   "version": "0.1.10",
-  "description": "CLI for extracting and applying source-level i18n migrations",
+  "description": "Chrome built-in Translator API adapter for translation-master",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
   "homepage": "https://github.com/hackycy/translation-master#readme",
@@ -12,9 +12,9 @@
   },
   "bugs": "https://github.com/hackycy/translation-master/issues",
   "keywords": [
-    "i18n",
     "translation",
-    "cli"
+    "chrome",
+    "translator-api"
   ],
   "sideEffects": false,
   "exports": {
@@ -22,18 +22,11 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
-    "./bin/tmigrate": {
-      "import": "./dist/bin/tmigrate.mjs",
-      "require": "./dist/bin/tmigrate.cjs"
-    },
     "./package.json": "./package.json"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.cts",
-  "bin": {
-    "tmigrate": "./dist/bin/tmigrate.mjs"
-  },
   "files": [
     "dist"
   ],
@@ -46,27 +39,10 @@
     "test": "vitest --passWithNoTests",
     "typecheck": "tsc"
   },
-  "peerDependencies": {
-    "@translation-master/chrome": "workspace:*"
-  },
-  "peerDependenciesMeta": {
-    "@translation-master/chrome": {
-      "optional": true
-    }
-  },
   "dependencies": {
-    "@babel/parser": "catalog:cli",
-    "@clack/prompts": "catalog:cli",
-    "@translation-master/core": "workspace:*",
-    "@translation-master/node": "workspace:*",
-    "@vue/compiler-sfc": "catalog:cli",
-    "commander": "catalog:cli",
-    "picocolors": "catalog:cli",
-    "tinyglobby": "catalog:cli",
-    "yaml": "catalog:testing"
+    "playwright-core": "catalog:cli"
   },
   "devDependencies": {
-    "@translation-master/chrome": "workspace:*",
     "@types/node": "catalog:types",
     "tsdown": "catalog:cli",
     "typescript": "catalog:cli",

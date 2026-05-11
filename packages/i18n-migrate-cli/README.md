@@ -53,6 +53,14 @@ pnpm exec tmigrate restore
 3. `apply` 只回写 `approved: true` 且未标记 `skip` 的条目。
 4. `apply` 写入前会备份原文件到 `.tmigrate/backups/`，可用 `restore` 回滚。
 
+### 翻译器后端
+
+| 后端 | 说明 |
+|---|---|
+| `local` | 本地 ONNX 模型，默认方案 |
+| `api` | HTTP 远程翻译服务 |
+| `chrome` | 通过 `@translation-master/chrome` 调用 Chromium / Chrome 的内置 Translator API，适合桌面 Chrome 环境 |
+
 ## 命令
 
 ### `init`
@@ -137,6 +145,24 @@ tmigrate apply
 |---|---|
 | `--dry-run` | 只打印 diff，不写入文件 |
 | `--path <path>` | 只处理指定文件或目录 |
+
+#### `chrome` 后端配置
+
+`chrome` 后端依赖独立包 `@translation-master/chrome`、桌面 Chrome 和 `playwright-core`，适合在本地机器上借助浏览器内置翻译能力提升质量。
+
+```bash
+pnpm add -D @translation-master/chrome
+```
+
+相关配置项位于 `.tmigrate/config.json` 的 `translatorOptions`：
+
+| 选项 | 说明 |
+|---|---|
+| `chromeChannel` | 浏览器渠道名，默认 `chrome` |
+| `chromeExecutablePath` | 指定 Chrome 可执行文件路径 |
+| `chromeHeadless` | 是否无头运行，默认 `false` |
+| `chromeUserDataDir` | 用户数据目录，默认临时目录 |
+| `chromeKeepAlive` | 扫描结束后是否保留浏览器进程，默认 `false` |
 
 执行时会显示阶段式进度提示：准备中、扫描可回写文件、逐个处理文件、写入源文件。
 
