@@ -132,6 +132,50 @@ describe('replacer syntax-aware writeback', () => {
     ])).toContain('<template v-if="fileMax > 1">with maximum uploads of {{ fileMax }}</template>')
   })
 
+  it('extracts static Vue tab attributes while ignoring dynamic bindings', () => {
+    const content = [
+      '<template>',
+      '  <ATabs>',
+      '    <ATabPane key="1" tab="消费记录" />',
+      '    <ATabPane key="2" tab="积分明细" />',
+      '    <ATabPane key="3" :tab="dynamicTab" />',
+      '  </ATabs>',
+      '</template>',
+    ].join('\n')
+    const extractor = new Extractor(config)
+    const segments = extractor.extract(content, 'src/DetailDrawer.vue')
+
+    expect(segments.map(segment => segment.text)).toEqual(['消费记录', '积分明细'])
+    const next = replace(content, 'src/DetailDrawer.vue', [
+      ['消费记录', 'Consumption Records'],
+      ['积分明细', 'Points Details'],
+      ['dynamicTab', 'Should not replace'],
+    ])
+    expect(next).toContain('tab="Consumption Records"')
+    expect(next).toContain('tab="Points Details"')
+    expect(next).toContain(':tab="dynamicTab"')
+  })
+
+  it('extracts static Vue component props generically without HTML attr whitelist', () => {
+    const content = [
+      '<template>',
+      '  <CustomWidget panel-title="账户安全" emptyText="暂无数据" data-test="测试ID" class="中文类名" :panel-title="dynamicTitle" />',
+      '</template>',
+    ].join('\n')
+    const extractor = new Extractor(config)
+    const segments = extractor.extract(content, 'src/CustomWidget.vue')
+
+    expect(segments.map(segment => segment.text)).toEqual(['账户安全', '暂无数据'])
+    const next = replace(content, 'src/CustomWidget.vue', [
+      ['账户安全', 'Account Security'],
+      ['暂无数据', 'No Data'],
+      ['dynamicTitle', 'Should not replace'],
+    ])
+    expect(next).toContain('panel-title="Account Security"')
+    expect(next).toContain('emptyText="No Data"')
+    expect(next).toContain(':panel-title="dynamicTitle"')
+  })
+
   it('extracts and replaces column titles in Vue TSX script setup blocks', () => {
     const content = [
       '<template><BasicTable /></template>',
@@ -184,6 +228,14 @@ describe('replacer syntax-aware writeback', () => {
     expect(replace(content, 'src/template.html', [
       ['最大上传{{ fileMax }}张图片', 'Maximum uploads {{ fileMax }} images'],
     ])).toContain('data-test="fileMax > 1">Maximum uploads {{ fileMax }} images</template>')
+  })
+
+  it('extracts common static HTML attrs including tab', () => {
+    const content = '<tab-pane tab="消费记录" :tab="dynamicTab" title="详情"></tab-pane>'
+    const extractor = new Extractor(config)
+    const segments = extractor.extract(content, 'src/template.html')
+
+    expect(segments.map(segment => segment.text)).toEqual(['消费记录', '详情'])
   })
 
   it('quotes unsafe yaml translations and preserves quoted yaml scalars', () => {

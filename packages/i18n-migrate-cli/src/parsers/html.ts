@@ -2,6 +2,8 @@ import type { FileParser, TextContext, TextSegment, TranslationEntry } from '../
 import type { RangeSegment } from './range'
 import { dedupeSegments, finalizeSegments, leadingSpaces, lineColumn, replaceTranslations } from './range'
 
+export const TRANSLATABLE_ATTR_NAMES = new Set(['title', 'alt', 'placeholder', 'aria-label', 'label', 'tab'])
+
 export const htmlParser: FileParser = {
   supportedExtensions: ['.html'],
   extract: (content: string, filePath: string): TextSegment[] => finalizeSegments(extractHtmlSegments(content, filePath), filePath),
@@ -45,13 +47,12 @@ function extractHtmlText(content: string, filePath: string, offset: number, cont
 }
 
 export function extractHtmlAttrSegments(content: string, filePath: string, offset: number): RangeSegment[] {
-  const attrNames = new Set(['title', 'alt', 'placeholder', 'aria-label', 'label'])
   const segments: RangeSegment[] = []
   const attrRe = /\s([\w-]+)=["'][^"']*["']/g
   for (const match of content.matchAll(attrRe)) {
     const name = match[1]
     const rawAttr = match[0]
-    if (!name || !attrNames.has(name))
+    if (!name || !TRANSLATABLE_ATTR_NAMES.has(name))
       continue
     const quoteIndex = rawAttr.search(/["']/)
     const raw = rawAttr.slice(quoteIndex + 1, -1)

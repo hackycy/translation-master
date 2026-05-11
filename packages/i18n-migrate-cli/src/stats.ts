@@ -131,7 +131,7 @@ export function formatMapStatsReport(report: MapStatsReport): string {
   }
 
   lines.push('')
-  lines.push(pc.cyan('下一步'))
+  lines.push(pc.cyan('建议'))
   if (report.current.untranslatedEntries > 0)
     lines.push(`- 先补齐 ${formatCount(report.current.untranslatedEntries)} 条待翻译文本。`)
   if (report.current.pendingReviewEntries > 0)

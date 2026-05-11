@@ -2,7 +2,6 @@ import type { FileParser, TextSegment, TranslationEntry } from '../types'
 import type { RangeSegment } from './range'
 import { parse as parseVue } from '@vue/compiler-sfc'
 import { extractStyleSegments } from './css'
-import { extractHtmlAttrSegments } from './html'
 import { dedupeSegments, finalizeSegments, leadingSpaces, lineColumn, replaceTranslations } from './range'
 import { extractScriptSegments } from './script'
 
@@ -21,9 +20,8 @@ export function extractVueSegments(content: string, filePath: string): RangeSegm
   const segments: RangeSegment[] = []
 
   if (descriptor.template) {
-    const offset = descriptor.template.loc.start.offset
     segments.push(...extractVueTemplateTextSegments(descriptor.template.ast, content, filePath))
-    segments.push(...extractHtmlAttrSegments(descriptor.template.content, filePath, offset))
+    segments.push(...extractVueTemplateAttrSegments(descriptor.template.ast, content, filePath))
   }
 
   for (const block of [descriptor.script, descriptor.scriptSetup]) {
@@ -64,6 +62,59 @@ interface VueTemplateNode {
     source: string
   }
   children?: unknown[]
+  props?: unknown[]
+}
+
+interface VueTemplateAttr {
+  type: number
+  name?: string
+  value?: {
+    content?: string
+    loc?: {
+      start: { offset: number }
+      end: { offset: number }
+      source: string
+    }
+  }
+}
+
+function extractVueTemplateAttrSegments(ast: unknown, content: string, filePath: string): RangeSegment[] {
+  const segments: RangeSegment[] = []
+
+  collectVueTemplateAttrSegments(ast, content, segments)
+  return dedupeSegments(segments, filePath)
+}
+
+function collectVueTemplateAttrSegments(
+  node: unknown,
+  content: string,
+  segments: RangeSegment[],
+): void {
+  if (!isVueTemplateNode(node))
+    return
+
+  for (const prop of node.props ?? []) {
+    if (!isVueStaticAttr(prop) || !prop.name || shouldSkipVueStaticAttr(prop.name) || !prop.value?.content || !prop.value.loc)
+      continue
+
+    const raw = prop.value.loc.source
+    const quoteOffset = isQuoted(raw) ? 1 : 0
+    const start = prop.value.loc.start.offset + quoteOffset
+    const end = prop.value.loc.end.offset - quoteOffset
+    const position = lineColumn(content, start)
+    segments.push({
+      text: prop.value.content,
+      start,
+      end,
+      line: position.line,
+      column: position.column,
+      context: 'html-attr',
+      nodeType: 'VueStaticAttribute',
+    })
+  }
+
+  for (const child of node.children ?? [])
+    collectVueTemplateAttrSegments(child, content, segments)
 }
 
 function extractVueTemplateTextSegments(ast: unknown, content: string, filePath: string): RangeSegment[] {
@@ -150,4 +201,22 @@ function isInlineTemplateTextNode(node: unknown): node is VueTemplateNode {
 
 function isVueTemplateNode(value: unknown): value is VueTemplateNode {
   return Boolean(value && typeof value === 'object' && 'type' in value)
+}
+
+function isVueStaticAttr(value: unknown): value is VueTemplateAttr {
+  return Boolean(value && typeof value === 'object' && (value as { type?: unknown }).type === 6)
+}
+
+function isQuoted(value: string): boolean {
+  return (value.startsWith('"') && value.endsWith('"')) || (value.startsWith('\'') && value.endsWith('\''))
+}
+
+function shouldSkipVueStaticAttr(name: string): boolean {
+  return name === 'class'
+    || name === 'style'
+    || name === 'id'
+    || name === 'key'
+    || name === 'ref'
+    || name.startsWith('data-')
+    || name.startsWith('aria-')
 }
