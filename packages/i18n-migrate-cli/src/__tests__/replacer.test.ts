@@ -34,13 +34,70 @@ describe('replacer syntax-aware writeback', () => {
       ['账号安全', 'Account\'s secure.'],
       ['保存路径', 'C:\\Users\\Tom "Home"'],
       ['普通字符串', `Keep ${plainExpression}'s text`],
-      [`你好 ${expression}`, `Hello ${expression}\``],
+      ['你好', 'Hello `team`'],
     ])
 
     expect(next).toContain('export const title = \'Account\\\'s secure.\'')
     expect(next).toContain('export const copy = "C:\\\\Users\\\\Tom \\"Home\\""')
     expect(next).toContain(`export const plain = 'Keep ${plainExpression}\\'s text'`)
-    expect(next).toContain(`export const message = \`Hello ${expression}\\\`\``)
+    expect(next).toContain(`export const message = \`Hello \\\`team\\\` ${expression}\``)
+  })
+
+  it('does not replace template literal expressions or comments as script text', () => {
+    const interpolationOpen = '$' + '{'
+    const nestedTitle = [
+      'const title = `订单支付 ',
+      'amount ? ` - ¥',
+      'amount}` : ""}`',
+    ].join(interpolationOpen)
+    const query = `const query = \`${interpolationOpen}config.url}${interpolationOpen}props.code}\``
+
+    const content = [
+      'const amount = 12',
+      nestedTitle,
+      '// const commented = \'不要翻译注释里的字符串\'',
+      query,
+    ].join('\n')
+
+    const next = replace(content, 'src/payment.ts', [
+      ['订单支付', 'Order Payment'],
+      ['不要翻译注释里的字符串', 'Should not appear'],
+      ['config.url', 'Should not appear either'],
+    ])
+
+    expect(next).toContain(nestedTitle.replace('订单支付', 'Order Payment'))
+    expect(next).toContain('// const commented = \'不要翻译注释里的字符串\'')
+    expect(next).toContain(query)
+  })
+
+  it('skips code-like script strings from real build failure shapes', () => {
+    const interpolationOpen = '$' + '{'
+    const incomeLine = `const income = \`<div style="color: #667eea; font-weight: 600;">经营收入：${interpolationOpen}amount}</div>\``
+    const templateLine = [
+      'const template = `JSON.parse(json(',
+      'options.replaceAll("\\\\", "\\\\\\\\").replaceAll("\'", "\\\\\'")}));`',
+    ].join(interpolationOpen)
+    const hrefLine = `href = href.trim().replace(/\\${interpolationOpen}([^}]+)?}/g, (s1, s2) => record[s2])`
+
+    const content = [
+      'const markdownOptions = { errFiles: [\'\', \'.md\'], lineNumbers: true }',
+      incomeLine,
+      templateLine,
+      'export type TableScroll = { x?: number | true | \'max-content\'; y?: number | true }',
+      hrefLine,
+      'const payload = \'{"name":"张三"}\'',
+      '// 商户用户列表',
+      'const columns = [{ title: "用户账号", dataIndex: "username" }]',
+    ].join('\n')
+
+    const segments = new Extractor(config).extract(content, 'src/failure-shapes.ts')
+
+    expect(segments.map(segment => segment.text)).toEqual(['用户账号'])
+    expect(replace(content, 'src/failure-shapes.ts', [
+      ['经营收入：', 'Operating income: <div style="broken">'],
+      ['商户用户列表', 'Commercial User List'],
+      ['用户账号', 'User account'],
+    ])).toContain('const columns = [{ title: "User account", dataIndex: "username" }]')
   })
 
   it('escapes translations for data and markup formats', () => {

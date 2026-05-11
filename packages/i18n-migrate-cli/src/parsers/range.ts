@@ -134,8 +134,8 @@ function encodeReplacement(content: string, segment: TextSegment, translation: s
 
   switch (segment.context) {
     case 'script':
-      return quote === '`'
-        ? encodeWithProtectedPlaceholders(translation, placeholders, text => escapeScriptString(text, quote))
+      return quote === '`' || segment.nodeType === 'TemplateElement'
+        ? encodeWithProtectedPlaceholders(translation, placeholders, text => escapeScriptString(text, '`'))
         : quote
           ? escapeScriptString(translation, quote)
           : translation

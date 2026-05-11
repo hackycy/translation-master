@@ -1,8 +1,8 @@
 {
-  "sourceLocale": "en",
-  "targetLocale": "zh",
+  "sourceLocale": "zh",
+  "targetLocale": "en",
   "include": [
-    "src/i18n-migrate-en-demo/**/*.{vue,ts,tsx,js,jsx,json,html,css,scss,less,md,yaml,yml}"
+    "src/i18n-migrate-scene/**/*.{vue,ts,tsx,js,jsx,json,html,css,scss,less,md,yaml,yml}"
   ],
   "exclude": [
     "node_modules",
@@ -34,19 +34,7 @@
     },
     {
       "type": "skip-pattern",
-      "value": "^[.#/]"
-    },
-    {
-      "type": "skip-pattern",
-      "value": "^[A-Z]{2}-\\d+$"
-    },
-    {
-      "type": "skip-pattern",
-      "value": "^[a-z]+$"
-    },
-    {
-      "type": "skip-pattern",
-      "value": "^[a-z]+-[a-z-]+$"
+      "value": "^[a-zA-Z]"
     },
     {
       "type": "min-length",
