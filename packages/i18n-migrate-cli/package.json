@@ -47,14 +47,14 @@
     "typecheck": "tsc"
   },
   "dependencies": {
-    "@babel/parser": "^7.28.5",
+    "@babel/parser": "catalog:cli",
     "@clack/prompts": "catalog:cli",
     "@translation-master/core": "workspace:*",
     "@translation-master/node": "workspace:*",
-    "@vue/compiler-sfc": "^3.5.13",
-    "commander": "^14.0.1",
-    "picocolors": "^1.1.1",
-    "tinyglobby": "^0.2.15",
+    "@vue/compiler-sfc": "catalog:cli",
+    "commander": "catalog:cli",
+    "picocolors": "catalog:cli",
+    "tinyglobby": "catalog:cli",
     "yaml": "catalog:testing"
   },
   "devDependencies": {

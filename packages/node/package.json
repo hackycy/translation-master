@@ -36,7 +36,7 @@
     "typecheck": "tsc"
   },
   "dependencies": {
-    "@huggingface/transformers": "^3.8.0",
+    "@huggingface/transformers": "catalog:inlined",
     "@translation-master/core": "workspace:*"
   }
 }

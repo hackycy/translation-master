@@ -16,6 +16,6 @@
     "@translation-master/vite-plugin": "workspace:^",
     "tsx": "catalog:cli",
     "vite": "catalog:cli",
-    "vite-plugin-inspect": "^11.1.0"
+    "vite-plugin-inspect": "catalog:cli"
   }
 }

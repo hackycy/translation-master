@@ -7,19 +7,26 @@ catalogs:
   cli:
     '@antfu/eslint-config': ^6.2.0
     '@antfu/ni': ^27.0.1
+    '@babel/parser': ^7.28.5
     '@clack/prompts': 0.11.0
+    '@vue/compiler-sfc': ^3.5.13
     bumpp: ^10.3.1
+    commander: ^14.0.1
     eslint: ^9.39.1
     lint-staged: ^16.2.6
+    picocolors: ^1.1.1
     publint: ^0.3.17
     simple-git-hooks: ^2.13.1
+    tinyglobby: ^0.2.15
     tsdown: ^0.16.0
     tsx: ^4.20.6
     turbo: ^2.9.12
     typescript: ^5.9.3
     vite: ^7.2.1
+    vite-plugin-inspect: ^11.3.3
   inlined:
     '@antfu/utils': ^9.3.0
+    '@huggingface/transformers': ^3.8.0
   testing:
     tinyexec: ^1.0.2
     vitest: ^4.0.7
