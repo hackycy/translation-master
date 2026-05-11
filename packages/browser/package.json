@@ -1,7 +1,7 @@
 {
   "name": "@translation-master/browser",
   "type": "module",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Browser translation library with DOM support, powered by Transformers.js",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
