@@ -1,7 +1,7 @@
 {
   "name": "@translation-master/chrome",
   "type": "module",
-  "version": "0.1.10",
+  "version": "0.2.0",
   "description": "Chrome built-in Translator API adapter for translation-master",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
