@@ -12,6 +12,7 @@
   },
   "devDependencies": {
     "@translation-master/browser": "workspace:^",
+    "@translation-master/chrome": "workspace:*",
     "@translation-master/i18n-migrate-cli": "workspace:*",
     "@translation-master/node": "workspace:^",
     "@translation-master/vite-plugin": "workspace:^",

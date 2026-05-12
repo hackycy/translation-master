@@ -256,6 +256,9 @@ importers:
       '@translation-master/browser':
         specifier: workspace:^
         version: link:../packages/browser
+      '@translation-master/chrome':
+        specifier: workspace:*
+        version: link:../packages/chrome
       '@translation-master/i18n-migrate-cli':
         specifier: workspace:*
         version: link:../packages/i18n-migrate-cli

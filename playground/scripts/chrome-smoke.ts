@@ -1,5 +1,5 @@
 import process from 'node:process'
-import { ChromeTranslator } from '../../packages/chrome/src/index'
+import { ChromeTranslator } from '@translation-master/chrome'
 
 const cacheDir = process.env.TMIGRATE_CHROME_CACHE_DIR
   ?? `${process.cwd()}/.tmigrate/chrome-smoke`
