@@ -413,6 +413,16 @@ function formatModelLoadMessage(
       ? `Chrome for Testing ready at ${event.executablePath}`
       : 'Chrome for Testing is ready'
   }
+  if (event.state === 'translator-create')
+    return 'Initializing Chrome Translator'
+  if (event.state === 'translator-download')
+    return 'Waiting for Chrome Translator download progress'
+  if (event.state === 'translator-timeout')
+    return 'Chrome Translator initialization timed out'
+  if (event.state === 'translator-ready')
+    return 'Chrome Translator model is ready'
+  if (event.state === 'translator-translated')
+    return 'Chrome Translator translation is ready'
 
   const filePrefix = filePath ? `Processing ${filePath}` : 'Loading local model'
   const fileProgress = currentFileTotal > 0 ? ` (${currentFileIndex}/${currentFileTotal})` : ''

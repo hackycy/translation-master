@@ -5,6 +5,7 @@ export default antfu(
   {
     type: 'lib',
     ignores: [
+      '**/.tmigrate/**',
       'packages/**/*.js',
       'packages/**/*.md',
     ],

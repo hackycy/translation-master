@@ -5,6 +5,7 @@
     "build": "vite build",
     "dev": "vite",
     "script": "tsx scripts/basic-translate.ts",
+    "script:chrome": "tsx scripts/chrome-smoke.ts",
     "script:batch": "tsx scripts/batch-translate.ts",
     "script:detect": "tsx scripts/language-detect.ts",
     "script:cache": "tsx scripts/file-cache.ts"

@@ -85,6 +85,7 @@ export interface TranslatorOptions {
   modelBaseUrl?: string
   apiKey?: string
   endpoint?: string
+  chromeBrowserExecutablePath?: string
   chromeBrowserCacheDir?: string
   chromeBrowserChannel?: 'stable' | 'beta' | 'dev' | 'canary'
   chromeBrowserBuildId?: string

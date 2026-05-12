@@ -1,10 +1,10 @@
 import type { BrowserContext, BrowserType, Page } from 'playwright-core'
 import { existsSync } from 'node:fs'
-import { writeFile } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
+import { createServer } from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
-import { pathToFileURL } from 'node:url'
 import {
   Browser,
   BrowserTag,
@@ -36,6 +36,7 @@ export interface ChromeTranslatorOptions {
   keepAlive?: boolean
   browserVisible?: boolean
   timeout?: number
+  browserExecutablePath?: string
   browserCacheDir?: string
   browserChannel?: 'stable' | 'beta' | 'dev' | 'canary'
   browserBuildId?: string
@@ -48,6 +49,7 @@ export interface ChromeDownloadProgressEvent {
   file?: string
   cacheDir?: string
   executablePath?: string
+  phase?: 'browser' | 'translator'
 }
 
 export class ChromeTranslator implements Translator {
@@ -56,6 +58,8 @@ export class ChromeTranslator implements Translator {
   private page: Page | null = null
   private ready: Promise<void> | null = null
   private queue = Promise.resolve()
+  private userDataDir: string | null = null
+  private bridgeServer: BridgeServer | null = null
 
   constructor(options: ChromeTranslatorOptions = {}) {
     this.options = options
@@ -67,11 +71,12 @@ export class ChromeTranslator implements Translator {
     if (!page)
       throw new Error('Chrome translator page was not initialized.')
 
-    const needsActivation = await this.prepareTranslator(page, options.sourceLocale, options.targetLocale)
+    const timeout = this.options.timeout ?? 30000
+    const needsActivation = await this.prepareTranslator(page, options.sourceLocale, options.targetLocale, timeout)
     if (needsActivation) {
       await page.click('#activate')
     }
-    await this.waitForTranslatorReady(page, options.sourceLocale, options.targetLocale)
+    await this.waitForTranslatorReady(page, options.sourceLocale, options.targetLocale, timeout)
   }
 
   async translate(texts: string[], options: TranslateOptions): Promise<TranslateResult[]> {
@@ -83,13 +88,14 @@ export class ChromeTranslator implements Translator {
 
       let translations: string[]
       try {
-        const needsActivation = await this.prepareTranslator(page, options.sourceLocale, options.targetLocale)
+        const timeout = this.options.timeout ?? 30000
+        const needsActivation = await this.prepareTranslator(page, options.sourceLocale, options.targetLocale, timeout)
 
         if (needsActivation)
           await page.click('#activate')
 
-        await this.waitForTranslatorReady(page, options.sourceLocale, options.targetLocale)
-        translations = await this.translatePreparedTexts(page, texts, options.sourceLocale, options.targetLocale, this.options.timeout ?? 30000)
+        await this.waitForTranslatorReady(page, options.sourceLocale, options.targetLocale, timeout)
+        translations = await this.translatePreparedTexts(page, texts, options.sourceLocale, options.targetLocale, timeout)
       }
       catch (error) {
         throw wrapError(`Chrome translator failed for ${options.sourceLocale}->${options.targetLocale} (${texts.length} text(s))`, error)
@@ -113,9 +119,14 @@ export class ChromeTranslator implements Translator {
     await this.queue
     if (this.context && !this.options.keepAlive)
       await this.context.close()
+    await this.disposeBridgeServer()
     this.context = null
     this.page = null
     this.ready = null
+    if (!this.options.keepAlive)
+      await removeBrowserProfileDir(this.userDataDir)
+    this.userDataDir = null
+    this.bridgeServer = null
   }
 
   private async ensureReady(): Promise<void> {
@@ -126,37 +137,65 @@ export class ChromeTranslator implements Translator {
 
   private async initialize(): Promise<void> {
     const { chromium } = await loadPlaywright()
-    const managedBrowser = await ensureManagedBrowser(this.options)
-    const userDataDir = this.options.userDataDir || path.join(os.tmpdir(), 'tmigrate-chrome-translator')
-    this.context = await chromium.launchPersistentContext(userDataDir, {
-      executablePath: managedBrowser.executablePath,
-      headless: !this.options.browserVisible,
-      args: [
-        '--enable-features=OptimizationGuideOnDeviceModel,TranslateKit',
-        '--disable-features=Translate',
-      ],
-    })
-    this.page = await this.context.newPage()
-    await this.page.exposeFunction('__tmigrateReportDownload', (event: unknown) => {
-      if (isProgressEvent(event))
-        this.options.onDownloadProgress?.(event)
-    })
-    await this.page.goto(await createBridgePageUrl())
+    const browser = await resolveChromeBrowser(this.options)
+    const userDataDir = await this.resolveUserDataDir()
+    this.bridgeServer = await createBridgeServer()
+    try {
+      this.context = await chromium.launchPersistentContext(userDataDir, {
+        executablePath: browser.executablePath,
+        headless: this.options.browserVisible === false,
+        args: [
+          '--enable-features=OptimizationGuideOnDeviceModel,TranslateKit',
+        ],
+      })
+      this.page = await this.context.newPage()
+      await this.page.exposeFunction('__tmigrateReportDownload', (event: unknown) => {
+        if (isProgressEvent(event))
+          this.options.onDownloadProgress?.(event)
+      })
+      await this.page.goto(this.bridgeServer.url)
 
-    const available = await this.page.evaluate(() => {
-      return 'Translator' in globalThis
-    })
-    if (!available) {
-      throw new Error(
-        'Chrome Translator API is not available in the launched browser. '
-        + `Managed browser path: ${managedBrowser.executablePath}. `
-        + 'The managed Chrome build may not expose the built-in Translator API yet.',
-      )
+      const available = await this.page.evaluate(() => {
+        return 'Translator' in globalThis
+      })
+      if (!available) {
+        throw new Error(
+          'Chrome Translator API is not available in the launched browser. '
+          + `Browser path: ${browser.executablePath}. `
+          + 'Use desktop Google Chrome 138+ with built-in AI translation support enabled.',
+        )
+      }
+    }
+    catch (error) {
+      await this.disposeBridgeServer()
+      throw error
     }
   }
 
-  private async prepareTranslator(page: Page, sourceLocale: string, targetLocale: string): Promise<boolean> {
-    return page.evaluate(({ sourceLocale, targetLocale }) => {
+  private async disposeBridgeServer(): Promise<void> {
+    if (!this.bridgeServer)
+      return
+    try {
+      await this.bridgeServer.close()
+    }
+    finally {
+      this.bridgeServer = null
+    }
+  }
+
+  private async resolveUserDataDir(): Promise<string> {
+    if (this.userDataDir)
+      return this.userDataDir
+    if (this.options.userDataDir) {
+      this.userDataDir = this.options.userDataDir
+      return this.userDataDir
+    }
+    this.userDataDir = await mkdtemp(path.join(os.tmpdir(), 'tmigrate-chrome-translator-'))
+    return this.userDataDir
+  }
+
+  private async prepareTranslator(page: Page, sourceLocale: string, targetLocale: string, timeout: number): Promise<boolean> {
+    return page.evaluate(({ sourceLocale, targetLocale, timeout }) => {
       const api = globalThis as typeof globalThis & {
         Translator?: {
           availability: (options: { sourceLanguage: string, targetLanguage: string }) => Promise<string>
@@ -167,7 +206,9 @@ export class ChromeTranslator implements Translator {
         __tmigratePrepareTranslator?: (options: {
           sourceLanguage: string
           targetLanguage: string
+          timeout: number
         }) => Promise<boolean>
+        __tmigrateReportDownload?: (event: ChromeDownloadProgressEvent) => void
       }
 
       if (!api.Translator) {
@@ -179,20 +220,27 @@ export class ChromeTranslator implements Translator {
       const createOptions = {
         sourceLanguage: sourceLocale,
         targetLanguage: targetLocale,
+        timeout,
       }
       if (api.__tmigrateTranslator?.key === `${sourceLocale}->${targetLocale}`)
         return false
       if (!api.__tmigratePrepareTranslator)
         throw new Error('Chrome translator bridge is not initialized.')
+      api.__tmigrateReportDownload?.({
+        progress: 0,
+        state: 'translator-create',
+        phase: 'translator',
+      })
       return api.__tmigratePrepareTranslator(createOptions)
     }, {
       sourceLocale,
       targetLocale,
+      timeout,
     })
   }
 
-  private async waitForTranslatorReady(page: Page, sourceLocale: string, targetLocale: string): Promise<void> {
-    await page.evaluate(async ({ sourceLocale, targetLocale }) => {
+  private async waitForTranslatorReady(page: Page, sourceLocale: string, targetLocale: string, timeout: number): Promise<void> {
+    await page.evaluate(async ({ sourceLocale, targetLocale, timeout }) => {
       const api = globalThis as typeof globalThis & {
         Translator?: {
           availability: (options: { sourceLanguage: string, targetLanguage: string }) => Promise<string>
@@ -202,6 +250,7 @@ export class ChromeTranslator implements Translator {
           translator: { translate: (text: string) => Promise<string>, destroy?: () => void }
         }
         __tmigrateTranslatorReady?: Promise<void>
+        __tmigrateReportDownload?: (event: ChromeDownloadProgressEvent) => void
       }
 
       if (!api.Translator)
@@ -220,14 +269,25 @@ export class ChromeTranslator implements Translator {
       if (api.__tmigrateTranslator?.key !== key) {
         if (!api.__tmigrateTranslatorReady)
           throw new Error('Chrome translator was not activated.')
-        await api.__tmigrateTranslatorReady
+        await Promise.race([
+          api.__tmigrateTranslatorReady,
+          new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error(`Chrome Translator.create timed out after ${timeout}ms. If the model is still downloading, run with a visible Google Chrome window and make sure chrome://on-device-internals has no model errors.`)), timeout)
+          }),
+        ])
       }
 
       if (api.__tmigrateTranslator?.key !== key)
         throw new Error('Chrome translator did not initialize for the requested language pair.')
+      api.__tmigrateReportDownload?.({
+        progress: 100,
+        state: 'translator-ready',
+        phase: 'translator',
+      })
     }, {
       sourceLocale,
       targetLocale,
+      timeout,
     })
   }
 
@@ -241,6 +301,7 @@ export class ChromeTranslator implements Translator {
           key: string
           translator: { translate: (text: string) => Promise<string>, destroy?: () => void }
         }
+        __tmigrateReportDownload?: (event: ChromeDownloadProgressEvent) => void
       }
 
       if (!api.Translator)
@@ -253,6 +314,11 @@ export class ChromeTranslator implements Translator {
       const translator = api.__tmigrateTranslator.translator
       const results: string[] = []
       for (const text of texts) {
+        api.__tmigrateReportDownload?.({
+          progress: 0,
+          state: 'translator-download',
+          phase: 'translator',
+        })
         const translated = await Promise.race([
           translator.translate(text),
           new Promise<never>((_, reject) => {
@@ -261,6 +327,11 @@ export class ChromeTranslator implements Translator {
         ])
         results.push(translated)
       }
+      api.__tmigrateReportDownload?.({
+        progress: 100,
+        state: 'translator-translated',
+        phase: 'translator',
+      })
       return results
     }, {
       texts,
@@ -269,6 +340,39 @@ export class ChromeTranslator implements Translator {
       timeout,
     })
   }
+}
+
+async function resolveChromeBrowser(options: ChromeTranslatorOptions): Promise<{ executablePath: string, cacheDir?: string, buildId?: string }> {
+  if (options.browserExecutablePath) {
+    const executablePath = path.resolve(options.browserExecutablePath)
+    if (!existsSync(executablePath))
+      throw new Error(`Configured Chrome executable was not found: ${executablePath}`)
+
+    options.onDownloadProgress?.({
+      progress: 100,
+      state: 'browser-ready',
+      executablePath,
+      file: executablePath,
+      phase: 'browser',
+    })
+    return { executablePath }
+  }
+
+  if (!options.browserBuildId) {
+    const executablePath = findSystemChromeExecutable(options.browserChannel ?? 'stable')
+    if (executablePath) {
+      options.onDownloadProgress?.({
+        progress: 100,
+        state: 'browser-ready',
+        executablePath,
+        file: executablePath,
+        phase: 'browser',
+      })
+      return { executablePath }
+    }
+  }
+
+  return ensureManagedBrowser(options)
 }
 
 async function ensureManagedBrowser(options: ChromeTranslatorOptions): Promise<{ executablePath: string, cacheDir: string, buildId: string }> {
@@ -361,6 +465,58 @@ function browserTagForChannel(channel: NonNullable<ChromeTranslatorOptions['brow
   return BrowserTag.STABLE
 }
 
+function findSystemChromeExecutable(channel: NonNullable<ChromeTranslatorOptions['browserChannel']>): string | undefined {
+  const candidates = systemChromeExecutableCandidates(channel)
+  return candidates.find(candidate => existsSync(candidate))
+}
+
+function systemChromeExecutableCandidates(channel: NonNullable<ChromeTranslatorOptions['browserChannel']>): string[] {
+  if (process.platform === 'darwin') {
+    const appName = channel === 'stable'
+      ? 'Google Chrome.app'
+      : `Google Chrome ${capitalizeChromeChannel(channel)}.app`
+    const executableName = channel === 'stable'
+      ? 'Google Chrome'
+      : `Google Chrome ${capitalizeChromeChannel(channel)}`
+    const homeApplications = path.join(os.homedir(), 'Applications', appName, 'Contents', 'MacOS', executableName)
+    return [
+      path.join('/Applications', appName, 'Contents', 'MacOS', executableName),
+      homeApplications,
+    ]
+  }
+
+  if (process.platform === 'win32') {
+    const suffix = channel === 'stable' ? '' : ` ${capitalizeChromeChannel(channel)}`
+    const executable = path.join('Google', `Chrome${suffix}`, 'Application', 'chrome.exe')
+    return [
+      process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, executable) : '',
+      process.env.PROGRAMFILES ? path.join(process.env.PROGRAMFILES, executable) : '',
+      process.env['PROGRAMFILES(X86)'] ? path.join(process.env['PROGRAMFILES(X86)'], executable) : '',
+    ].filter(Boolean)
+  }
+
+  if (channel === 'stable') {
+    return [
+      '/usr/bin/google-chrome',
+      '/usr/bin/google-chrome-stable',
+      '/usr/bin/chromium-browser',
+      '/usr/bin/chromium',
+      '/snap/bin/chromium',
+    ]
+  }
+
+  return [
+    `/usr/bin/google-chrome-${channel}`,
+    `/opt/google/chrome-${channel}/chrome`,
+  ]
+}
+
+function capitalizeChromeChannel(channel: Exclude<NonNullable<ChromeTranslatorOptions['browserChannel']>, 'stable'>): string {
+  if (channel === 'dev')
+    return 'Dev'
+  return channel[0].toUpperCase() + channel.slice(1)
+}
+
 async function findCachedChrome(
   cacheDir: string,
   platform: NonNullable<ReturnType<typeof detectBrowserPlatform>>,
@@ -383,6 +539,30 @@ async function findCachedChrome(
 
 function defaultBrowserCacheDir(): string {
   return path.join(process.cwd(), '.tmigrate', 'chrome')
+}
+
+export function normalizeDownloadProgress(loaded: unknown, total: unknown): number {
+  const safeLoaded = typeof loaded === 'number' ? loaded : 0
+  const safeTotal = typeof total === 'number' ? total : 0
+  const rawProgress = safeLoaded <= 1
+    ? safeLoaded * 100
+    : safeTotal > 0
+      ? (safeLoaded / safeTotal) * 100
+      : safeLoaded
+
+  return Math.max(0, Math.min(100, Math.round(rawProgress)))
+}
+
+async function removeBrowserProfileDir(dir: string | null): Promise<void> {
+  if (!dir)
+    return
+  try {
+    const { rm } = await import('node:fs/promises')
+    await rm(dir, { recursive: true, force: true })
+  }
+  catch {
+    // Best-effort cleanup; stale dirs are acceptable if the browser crashes.
+  }
 }
 
 async function loadPlaywright(): Promise<{ chromium: BrowserType }> {
@@ -415,10 +595,39 @@ function toError(error: unknown): Error {
   }
 }
 
-async function createBridgePageUrl(): Promise<string> {
-  const filePath = path.join(os.tmpdir(), 'tmigrate-chrome-translator.html')
-  await writeFile(filePath, bridgeHtml(), 'utf8')
-  return pathToFileURL(filePath).toString()
+interface BridgeServer {
+  url: string
+  close: () => Promise<void>
+}
+
+async function createBridgeServer(): Promise<BridgeServer> {
+  const html = bridgeHtml()
+  const server = createServer((_, response) => {
+    response.writeHead(200, {
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': 'no-store',
+    })
+    response.end(html)
+  })
+
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', () => {
+      server.off('error', reject)
+      resolve()
+    })
+  })
+
+  const address = server.address()
+  if (!address || typeof address === 'string')
+    throw new Error('Failed to start Chrome bridge server.')
+
+  return {
+    url: `http://localhost:${address.port}/`,
+    close: () => new Promise<void>((resolve, reject) => {
+      server.close(error => error ? reject(error) : resolve())
+    }),
+  }
 }
 
 function bridgeHtml(): string {
@@ -433,11 +642,28 @@ function bridgeHtml(): string {
   <script>
     const api = globalThis;
     const button = document.getElementById('activate');
+    let createToken = 0;
+
+    function normalizeBridgeDownloadProgress(loaded, total) {
+      const safeLoaded = typeof loaded === 'number' ? loaded : 0;
+      const safeTotal = typeof total === 'number' ? total : 0;
+      const rawProgress = safeLoaded <= 1
+        ? safeLoaded * 100
+        : safeTotal > 0
+          ? (safeLoaded / safeTotal) * 100
+          : safeLoaded;
+      return Math.max(0, Math.min(100, Math.round(rawProgress)));
+    }
+
+    function reportTranslatorProgress(progress, state) {
+      api.__tmigrateReportDownload && api.__tmigrateReportDownload({ progress, state, phase: 'translator' });
+    }
 
     api.__tmigratePrepareTranslator = async function(options) {
       if (api.__tmigrateTranslator && api.__tmigrateTranslator.key === options.sourceLanguage + '->' + options.targetLanguage)
         return false;
 
+      createToken += 1;
       api.__tmigratePendingTranslator = options;
       api.__tmigrateTranslatorReady = new Promise((resolve, reject) => {
         api.__tmigrateResolveTranslator = resolve;
@@ -452,6 +678,7 @@ function bridgeHtml(): string {
         return;
 
       try {
+        const token = createToken;
         const key = pending.sourceLanguage + '->' + pending.targetLanguage;
         if (api.__tmigrateTranslator && api.__tmigrateTranslator.key === key) {
           api.__tmigrateResolveTranslator && api.__tmigrateResolveTranslator();
@@ -461,24 +688,42 @@ function bridgeHtml(): string {
         if (api.__tmigrateTranslator && api.__tmigrateTranslator.translator.destroy)
           api.__tmigrateTranslator.translator.destroy();
 
-        const translator = await api.Translator.create({
+        const createPromise = api.Translator.create({
           sourceLanguage: pending.sourceLanguage,
           targetLanguage: pending.targetLanguage,
           monitor(monitor) {
             monitor.addEventListener('downloadprogress', (event) => {
-              const total = event.total || 0;
-              const progress = total > 0 ? Math.round(((event.loaded || 0) / total) * 100) : 0;
-              api.__tmigrateReportDownload && api.__tmigrateReportDownload({ progress, state: 'download' });
+              const progress = normalizeBridgeDownloadProgress(event.loaded, event.total);
+              reportTranslatorProgress(progress, 'translator-download');
             });
           },
         });
+        createPromise.then((lateTranslator) => {
+          if (token !== createToken && lateTranslator && lateTranslator.destroy)
+            lateTranslator.destroy();
+        }).catch(() => {});
+        const translator = await Promise.race([
+          createPromise,
+          new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Chrome Translator.create timed out after ' + pending.timeout + 'ms.')), pending.timeout);
+          }),
+        ]);
+
+        if (token !== createToken) {
+          if (translator && translator.destroy)
+            translator.destroy();
+          return;
+        }
 
         api.__tmigrateTranslator = { key, translator };
         api.__tmigratePendingTranslator = null;
-        api.__tmigrateReportDownload && api.__tmigrateReportDownload({ progress: 100, state: 'ready' });
+        reportTranslatorProgress(100, 'translator-ready');
         api.__tmigrateResolveTranslator && api.__tmigrateResolveTranslator();
       }
       catch (error) {
+        createToken += 1;
+        reportTranslatorProgress(0, 'translator-timeout');
+        api.__tmigratePendingTranslator = null;
         api.__tmigrateRejectTranslator && api.__tmigrateRejectTranslator(error);
       }
     });

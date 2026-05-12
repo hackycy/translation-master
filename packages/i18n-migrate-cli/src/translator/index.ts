@@ -5,7 +5,20 @@ import { LocalTranslator } from './local'
 export interface TranslatorLoadProgress {
   modelId: string
   progress: number
-  state: 'initiate' | 'download' | 'progress' | 'done' | 'ready' | 'browser-resolve' | 'browser-download' | 'browser-ready'
+  state:
+    | 'initiate'
+    | 'download'
+    | 'progress'
+    | 'done'
+    | 'ready'
+    | 'browser-resolve'
+    | 'browser-download'
+    | 'browser-ready'
+    | 'translator-create'
+    | 'translator-download'
+    | 'translator-timeout'
+    | 'translator-ready'
+    | 'translator-translated'
   file?: string
   cacheDir?: string
   executablePath?: string
@@ -18,9 +31,10 @@ export interface CreateTranslatorOptions {
 export function createTranslator(config: MigrateConfig, options: CreateTranslatorOptions = {}): Translator {
   if (config.translator === 'chrome') {
     return new LazyChromeTranslator({
-      browserCacheDir: config.translatorOptions.chromeBrowserCacheDir,
+      browserExecutablePath: config.translatorOptions.chromeBrowserExecutablePath || undefined,
+      browserCacheDir: config.translatorOptions.chromeBrowserCacheDir || undefined,
       browserChannel: config.translatorOptions.chromeBrowserChannel,
-      browserBuildId: config.translatorOptions.chromeBrowserBuildId,
+      browserBuildId: config.translatorOptions.chromeBrowserBuildId || undefined,
       browserVisible: config.translatorOptions.chromeBrowserVisible,
       timeout: config.translatorOptions.timeout,
       onDownloadProgress(event) {
@@ -51,6 +65,7 @@ export function createTranslator(config: MigrateConfig, options: CreateTranslato
 }
 
 type ChromeTranslatorConstructor = new (options?: {
+  browserExecutablePath?: string
   browserCacheDir?: string
   browserChannel?: 'stable' | 'beta' | 'dev' | 'canary'
   browserBuildId?: string
