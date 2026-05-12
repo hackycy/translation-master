@@ -40,7 +40,6 @@
     "typecheck": "tsc"
   },
   "dependencies": {
-    "@puppeteer/browsers": "catalog:cli",
     "playwright-core": "catalog:cli"
   },
   "devDependencies": {

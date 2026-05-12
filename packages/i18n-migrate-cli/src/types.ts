@@ -174,7 +174,7 @@ export type ScanProgressEvent
   = | { phase: 'config', message: string }
     | { phase: 'discover', message: string, totalFiles?: number }
     | { phase: 'file', filePath: string, current: number, total: number }
-    | { phase: 'model-load', modelId: string, progress: number, state: string, file?: string, cacheDir?: string, executablePath?: string }
+    | { phase: 'model-load', modelId: string, progress: number, state: string, file?: string, cacheDir?: string, executablePath?: string, downloadUrl?: string, version?: string }
     | { phase: 'translate', filePath: string, completedBatches: number, totalBatches: number, completedTexts: number, totalTexts: number }
     | { phase: 'write', filePath: string, current: number, total: number }
     | { phase: 'done', result: ScanResult }

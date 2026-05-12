@@ -9,7 +9,6 @@ catalogs:
     '@antfu/ni': ^27.0.1
     '@babel/parser': ^7.28.5
     '@clack/prompts': 0.11.0
-    '@puppeteer/browsers': 2.13.2
     '@vue/compiler-sfc': ^3.5.13
     bumpp: ^10.3.1
     commander: ^14.0.1

@@ -402,16 +402,17 @@ function formatModelLoadMessage(
   currentFileTotal: number,
 ): string {
   if (event.state === 'browser-resolve') {
-    return event.cacheDir
-      ? `Checking Chrome for Testing cache · ${event.cacheDir}`
-      : 'Checking Chrome for Testing cache'
+    return 'Checking installed Google Chrome'
   }
-  if (event.state === 'browser-download')
-    return `Downloading Chrome for Testing ${event.progress}%${event.cacheDir ? ` · cache ${event.cacheDir}` : ''}`
+  if (event.state === 'browser-install-required') {
+    return event.downloadUrl
+      ? `Google Chrome 138+ is required · ${event.downloadUrl}`
+      : 'Google Chrome 138+ is required'
+  }
   if (event.state === 'browser-ready') {
     return event.executablePath
-      ? `Chrome for Testing ready at ${event.executablePath}`
-      : 'Chrome for Testing is ready'
+      ? `Google Chrome ready at ${event.executablePath}`
+      : 'Google Chrome is ready'
   }
   if (event.state === 'translator-create')
     return 'Initializing Chrome Translator'

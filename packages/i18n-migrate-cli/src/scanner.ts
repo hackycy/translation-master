@@ -27,6 +27,8 @@ export async function scanProject(options: ScanOptions = {}): Promise<ScanResult
         file: event.file,
         cacheDir: event.cacheDir,
         executablePath: event.executablePath,
+        downloadUrl: event.downloadUrl,
+        version: event.version,
       })
     },
   })

@@ -13,6 +13,7 @@ export interface TranslatorLoadProgress {
     | 'ready'
     | 'browser-resolve'
     | 'browser-download'
+    | 'browser-install-required'
     | 'browser-ready'
     | 'translator-create'
     | 'translator-download'
@@ -22,6 +23,8 @@ export interface TranslatorLoadProgress {
   file?: string
   cacheDir?: string
   executablePath?: string
+  downloadUrl?: string
+  version?: string
 }
 
 export interface CreateTranslatorOptions {
@@ -45,6 +48,8 @@ export function createTranslator(config: MigrateConfig, options: CreateTranslato
           file: event.file,
           cacheDir: event.cacheDir,
           executablePath: event.executablePath,
+          downloadUrl: event.downloadUrl,
+          version: event.version,
         })
       },
     })
@@ -71,7 +76,7 @@ type ChromeTranslatorConstructor = new (options?: {
   browserBuildId?: string
   browserVisible?: boolean
   timeout?: number
-  onDownloadProgress?: (event: { progress: number, state: string, file?: string, cacheDir?: string, executablePath?: string }) => void
+  onDownloadProgress?: (event: { progress: number, state: string, file?: string, cacheDir?: string, executablePath?: string, downloadUrl?: string, version?: string }) => void
 }) => Translator
 
 class LazyChromeTranslator implements Translator {

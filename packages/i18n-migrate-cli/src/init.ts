@@ -35,8 +35,6 @@ export async function initProject(options: InitOptions = {}): Promise<InitResult
     await mkdir(dirPath, { recursive: true })
     created.push(path.relative(cwd, dirPath) || '.tmigrate')
   }
-  await mkdir(path.join(root, 'chrome'), { recursive: true })
-  created.push(path.relative(cwd, path.join(root, 'chrome')))
 
   const seed = {
     sourceLocale: options.from ?? DEFAULT_CONFIG.sourceLocale,

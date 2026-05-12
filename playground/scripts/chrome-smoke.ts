@@ -1,8 +1,6 @@
 import process from 'node:process'
 import { ChromeTranslator } from '@translation-master/chrome'
 
-const cacheDir = process.env.TMIGRATE_CHROME_CACHE_DIR
-  ?? `${process.cwd()}/.tmigrate/chrome-smoke`
 const browserVisible = process.env.TMIGRATE_CHROME_VISIBLE !== '0'
 const browserExecutablePath = process.env.TMIGRATE_CHROME_EXECUTABLE_PATH || undefined
 const sourceLocale = process.env.TMIGRATE_CHROME_SOURCE_LOCALE ?? 'zh'
@@ -11,7 +9,6 @@ const observedStates: string[] = []
 
 const translator = new ChromeTranslator({
   browserExecutablePath,
-  browserCacheDir: cacheDir,
   browserVisible,
   onDownloadProgress(event) {
     observedStates.push(`${event.phase ?? 'browser'}:${event.state}:${event.progress}`)
@@ -32,7 +29,6 @@ const startedAt = Date.now()
 
 try {
   console.log(`Chrome smoke test`)
-  console.log(`  cacheDir: ${cacheDir}`)
   if (browserExecutablePath)
     console.log(`  executablePath: ${browserExecutablePath}`)
   console.log(`  visible: ${browserVisible}`)

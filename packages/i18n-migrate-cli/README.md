@@ -64,7 +64,7 @@ pnpm exec tmigrate restore
 |---|---|
 | `local` | 本地 ONNX 模型，默认方案 |
 | `api` | HTTP 远程翻译服务 |
-| `chrome` | 通过 `@translation-master/chrome` 下载并复用受管理的 Chrome for Testing，再调用内置 Translator API |
+| `chrome` | 通过 `@translation-master/chrome` 启动本机 Google Chrome，再调用内置 Translator API |
 
 ## 命令
 
@@ -155,22 +155,21 @@ tmigrate apply
 
 #### `chrome` 后端配置
 
-`chrome` 后端依赖独立包 `@translation-master/chrome`。首次使用时会自动下载一份受管理的 Chrome for Testing 到 `.tmigrate/chrome`，之后复用本地缓存，不读取用户机器上已有的 Chrome 配置。
+`chrome` 后端依赖独立包 `@translation-master/chrome` 和本机 Google Chrome 138+。不会自动下载 Chrome for Testing；如果找不到兼容的 Google Chrome，请先从 <https://www.google.com/chrome/> 安装或升级，或在配置里指定 `chromeBrowserExecutablePath`。
 
 ```bash
 pnpm add -D @translation-master/chrome
 ```
 
-扫描时会在终端提示受管理浏览器的缓存目录和可执行文件路径，便于追溯。CLI 不会自动删除这份浏览器缓存；如果需要释放空间，可按提示路径手动删除缓存目录。
+扫描时会在终端提示正在使用的 Google Chrome 可执行文件路径，便于追溯。
 
 相关配置项位于 `.tmigrate/config.json` 的 `translatorOptions`：
 
 | 选项 | 说明 |
 |---|---|
-| `chromeBrowserCacheDir` | 可选：覆盖受管理 Chrome 的缓存目录。默认使用项目目录下的 `.tmigrate/chrome` |
 | `chromeBrowserChannel` | 可选：Chrome 通道，默认 `stable`，可选 `beta`、`dev`、`canary` |
-| `chromeBrowserBuildId` | 可选：精确指定 Chrome build ID，留空则按通道解析 |
-| `chromeBrowserVisible` | 可选：是否显示 Chrome 窗口，默认 `false`，需要显式开启才会展示窗口 |
+| `chromeBrowserExecutablePath` | 可选：指定 Google Chrome 可执行文件路径，留空则按通道自动查找 |
+| `chromeBrowserVisible` | 可选：是否显示 Chrome 窗口，默认 `true`。首次下载内置翻译模型时建议保持显示 |
 
 执行时会显示阶段式进度提示：准备中、扫描可回写文件、逐个处理文件、写入源文件。
 

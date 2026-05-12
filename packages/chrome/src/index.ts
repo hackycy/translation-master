@@ -1,18 +1,16 @@
 import type { BrowserContext, BrowserType, Page } from 'playwright-core'
+import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdtemp } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
-import {
-  Browser,
-  BrowserTag,
-  computeExecutablePath,
-  detectBrowserPlatform,
-  install,
-  resolveBuildId,
-} from '@puppeteer/browsers'
+import { promisify } from 'node:util'
+
+const execFileAsync = promisify(execFile)
+const MIN_CHROME_TRANSLATOR_MAJOR_VERSION = 138
+const GOOGLE_CHROME_DOWNLOAD_URL = 'https://www.google.com/chrome/'
 
 export interface TranslateOptions {
   sourceLocale: string
@@ -49,6 +47,8 @@ export interface ChromeDownloadProgressEvent {
   file?: string
   cacheDir?: string
   executablePath?: string
+  downloadUrl?: string
+  version?: string
   phase?: 'browser' | 'translator'
 }
 
@@ -343,126 +343,61 @@ export class ChromeTranslator implements Translator {
 }
 
 async function resolveChromeBrowser(options: ChromeTranslatorOptions): Promise<{ executablePath: string, cacheDir?: string, buildId?: string }> {
+  options.onDownloadProgress?.({
+    progress: 0,
+    state: 'browser-resolve',
+    phase: 'browser',
+  })
+
+  if (options.browserBuildId) {
+    throw new Error(
+      `Managed Chrome for Testing builds are not supported for Chrome Translator. Install or upgrade desktop Google Chrome instead: ${GOOGLE_CHROME_DOWNLOAD_URL}`,
+    )
+  }
+
   if (options.browserExecutablePath) {
     const executablePath = path.resolve(options.browserExecutablePath)
     if (!existsSync(executablePath))
       throw new Error(`Configured Chrome executable was not found: ${executablePath}`)
 
+    const version = await ensureCompatibleGoogleChrome(executablePath)
     options.onDownloadProgress?.({
       progress: 100,
       state: 'browser-ready',
       executablePath,
       file: executablePath,
+      version,
       phase: 'browser',
     })
     return { executablePath }
   }
 
-  if (!options.browserBuildId) {
-    const executablePath = findSystemChromeExecutable(options.browserChannel ?? 'stable')
-    if (executablePath) {
-      options.onDownloadProgress?.({
-        progress: 100,
-        state: 'browser-ready',
-        executablePath,
-        file: executablePath,
-        phase: 'browser',
-      })
-      return { executablePath }
-    }
-  }
-
-  return ensureManagedBrowser(options)
-}
-
-async function ensureManagedBrowser(options: ChromeTranslatorOptions): Promise<{ executablePath: string, cacheDir: string, buildId: string }> {
-  const platform = detectBrowserPlatform()
-  if (!platform)
-    throw new Error(`Cannot download Chrome for this platform: ${os.platform()} (${os.arch()}).`)
-
-  const cacheDir = path.resolve(options.browserCacheDir || defaultBrowserCacheDir())
-  const browserTag = browserTagForChannel(options.browserChannel ?? 'stable')
-  const progressBase = {
-    cacheDir,
-  }
-
-  options.onDownloadProgress?.({
-    ...progressBase,
-    progress: 0,
-    state: 'browser-resolve',
-  })
-
-  const targetBuildId = options.browserBuildId || await resolveBuildId(Browser.CHROME, platform, browserTag)
-  const cached = await findCachedChrome(cacheDir, platform, targetBuildId)
-  if (cached) {
+  const executablePath = findSystemChromeExecutable(options.browserChannel ?? 'stable')
+  if (!executablePath) {
     options.onDownloadProgress?.({
-      ...progressBase,
-      progress: 100,
-      state: 'browser-ready',
-      executablePath: cached.executablePath,
-      file: cached.executablePath,
+      progress: 0,
+      state: 'browser-install-required',
+      downloadUrl: GOOGLE_CHROME_DOWNLOAD_URL,
+      phase: 'browser',
     })
-
-    return {
-      executablePath: cached.executablePath,
-      cacheDir,
-      buildId: targetBuildId,
-    }
-  }
-
-  const buildId = targetBuildId
-  let lastProgress = -1
-  const installed = await install({
-    browser: Browser.CHROME,
-    buildId,
-    buildIdAlias: options.browserChannel ?? 'stable',
-    cacheDir,
-    platform,
-    downloadProgressCallback(downloadedBytes, totalBytes) {
-      const progress = totalBytes > 0
-        ? Math.min(99, Math.round((downloadedBytes / totalBytes) * 100))
-        : 0
-      if (progress === lastProgress)
-        return
-      lastProgress = progress
-      options.onDownloadProgress?.({
-        ...progressBase,
-        progress,
-        state: 'browser-download',
-      })
-    },
-  })
-
-  if (!existsSync(installed.executablePath)) {
     throw new Error(
-      'Managed Chrome download completed but the executable was not found. '
-      + `Expected: ${installed.executablePath}`,
+      'Google Chrome was not found. Chrome Translator requires desktop Google Chrome '
+      + `${MIN_CHROME_TRANSLATOR_MAJOR_VERSION}+; download it from ${GOOGLE_CHROME_DOWNLOAD_URL} `
+      + 'or set browserExecutablePath to an installed Google Chrome executable.',
     )
   }
 
+  const version = await ensureCompatibleGoogleChrome(executablePath)
   options.onDownloadProgress?.({
-    ...progressBase,
     progress: 100,
     state: 'browser-ready',
-    executablePath: installed.executablePath,
-    file: installed.executablePath,
+    executablePath,
+    file: executablePath,
+    version,
+    phase: 'browser',
   })
 
-  return {
-    executablePath: installed.executablePath,
-    cacheDir,
-    buildId,
-  }
-}
-
-function browserTagForChannel(channel: NonNullable<ChromeTranslatorOptions['browserChannel']>): BrowserTag {
-  if (channel === 'beta')
-    return BrowserTag.BETA
-  if (channel === 'dev')
-    return BrowserTag.DEV
-  if (channel === 'canary')
-    return BrowserTag.CANARY
-  return BrowserTag.STABLE
+  return { executablePath }
 }
 
 function findSystemChromeExecutable(channel: NonNullable<ChromeTranslatorOptions['browserChannel']>): string | undefined {
@@ -517,28 +452,39 @@ function capitalizeChromeChannel(channel: Exclude<NonNullable<ChromeTranslatorOp
   return channel[0].toUpperCase() + channel.slice(1)
 }
 
-async function findCachedChrome(
-  cacheDir: string,
-  platform: NonNullable<ReturnType<typeof detectBrowserPlatform>>,
-  buildId: string,
-): Promise<{ executablePath: string, buildId: string } | undefined> {
-  const cachedExecutable = computeExecutablePath({
-    cacheDir,
-    browser: Browser.CHROME,
-    platform,
-    buildId,
-  })
-  if (!existsSync(cachedExecutable))
-    return undefined
+async function ensureCompatibleGoogleChrome(executablePath: string): Promise<string> {
+  const versionText = await readChromeVersion(executablePath)
+  if (/Chrome for Testing/i.test(versionText)) {
+    throw new Error(
+      `Chrome Translator requires desktop Google Chrome, but got ${versionText}. `
+      + `Download Google Chrome from ${GOOGLE_CHROME_DOWNLOAD_URL}.`,
+    )
+  }
 
-  return {
-    executablePath: cachedExecutable,
-    buildId,
+  const majorVersion = parseChromeMajorVersion(versionText)
+  if (!majorVersion || majorVersion < MIN_CHROME_TRANSLATOR_MAJOR_VERSION) {
+    throw new Error(
+      `Chrome Translator requires Google Chrome ${MIN_CHROME_TRANSLATOR_MAJOR_VERSION}+; got ${versionText}. `
+      + `Upgrade Google Chrome from ${GOOGLE_CHROME_DOWNLOAD_URL}.`,
+    )
+  }
+
+  return versionText
+}
+
+async function readChromeVersion(executablePath: string): Promise<string> {
+  try {
+    const { stdout, stderr } = await execFileAsync(executablePath, ['--version'], { timeout: 10000 })
+    return (stdout || stderr).trim()
+  }
+  catch (error) {
+    throw new Error(`Failed to read Google Chrome version from ${executablePath}.`, { cause: toError(error) })
   }
 }
 
-function defaultBrowserCacheDir(): string {
-  return path.join(process.cwd(), '.tmigrate', 'chrome')
+export function parseChromeMajorVersion(versionText: string): number | undefined {
+  const match = /\b(?:Google\s+)?Chrome(?:\s+for\s+Testing)?\s+(\d+)\./i.exec(versionText)
+  return match ? Number(match[1]) : undefined
 }
 
 export function normalizeDownloadProgress(loaded: unknown, total: unknown): number {

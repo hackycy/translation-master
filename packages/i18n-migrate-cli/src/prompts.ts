@@ -214,7 +214,7 @@ async function promptTranslatorOptions(
   }
 
   const chromeBrowserChannel = await select({
-    message: 'Managed Chrome channel',
+    message: 'Google Chrome channel',
     initialValue: defaults.translatorOptions?.chromeBrowserChannel ?? 'stable',
     options: [
       { value: 'stable', label: 'Stable' },
@@ -225,32 +225,23 @@ async function promptTranslatorOptions(
   })
   assertPromptValue(chromeBrowserChannel)
 
-  const chromeBrowserBuildId = await text({
-    message: 'Chrome build ID',
-    initialValue: defaults.translatorOptions?.chromeBrowserBuildId ?? '',
-    placeholder: 'Leave empty to resolve from the selected channel',
+  const chromeBrowserExecutablePath = await text({
+    message: 'Google Chrome executable path',
+    initialValue: defaults.translatorOptions?.chromeBrowserExecutablePath ?? '',
+    placeholder: 'Leave empty to auto-detect installed Google Chrome',
   })
-  assertPromptValue(chromeBrowserBuildId)
-  const normalizedChromeBrowserBuildId = normalizePromptText(chromeBrowserBuildId)
-
-  const chromeBrowserCacheDir = await text({
-    message: 'Chrome cache dir',
-    initialValue: defaults.translatorOptions?.chromeBrowserCacheDir ?? '.tmigrate/chrome',
-    placeholder: '.tmigrate/chrome',
-  })
-  assertPromptValue(chromeBrowserCacheDir)
-  const normalizedChromeBrowserCacheDir = normalizePromptText(chromeBrowserCacheDir)
+  assertPromptValue(chromeBrowserExecutablePath)
+  const normalizedChromeBrowserExecutablePath = normalizePromptText(chromeBrowserExecutablePath)
 
   const chromeBrowserVisible = await confirm({
     message: 'Show Chrome window',
-    initialValue: defaults.translatorOptions?.chromeBrowserVisible ?? false,
+    initialValue: defaults.translatorOptions?.chromeBrowserVisible ?? true,
   })
   assertPromptValue(chromeBrowserVisible)
 
   return {
     chromeBrowserChannel,
-    chromeBrowserBuildId: normalizedChromeBrowserBuildId,
-    chromeBrowserCacheDir: normalizedChromeBrowserCacheDir || '.tmigrate/chrome',
+    chromeBrowserExecutablePath: normalizedChromeBrowserExecutablePath,
     chromeBrowserVisible: chromeBrowserVisible === true,
   }
 }

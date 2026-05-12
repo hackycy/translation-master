@@ -347,9 +347,8 @@ describe('i18n migrate workflow', () => {
 
     expect(config.translator).toBe('chrome')
     expect(config.translatorOptions).toMatchObject({
-      chromeBrowserCacheDir: '.tmigrate/chrome',
       chromeBrowserChannel: 'stable',
-      chromeBrowserBuildId: '',
+      chromeBrowserExecutablePath: '',
       chromeBrowserVisible: true,
     })
   })
