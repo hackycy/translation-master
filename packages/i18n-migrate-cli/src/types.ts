@@ -135,6 +135,7 @@ export interface AdaptCalleeConfig {
 export interface AdaptKeyReferenceConfig {
   mode: 'local' | 'full'
   separator: string
+  namespace?: string
 }
 
 export interface AdaptRuntimeImportConfig {

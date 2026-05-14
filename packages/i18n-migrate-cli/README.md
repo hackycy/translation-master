@@ -242,6 +242,8 @@ tmigrate adapt src --strategy ast
 
 带插值的 Vue 模板文本会转换成具名参数调用，例如 `最大上传{{ fileMax }}张图片` -> `{{ $t('maxUploadImages', { fileMax }) }}`。
 
+如果配置了 `adapt.keyReference.mode: "full"`，回写 key 会按 locale 文件路径生成完整引用；同时会自动继承 `convert.namespace`。例如 `convert.namespace: "admin"` 且源文件为 `src/views/Login.vue` 时，`submit` 会回写为 `$t('admin.views.Login.submit')`。没有配置 `convert.namespace` 时则为 `$t('views.Login.submit')`。
+
 常用选项：
 
 | 选项 | 说明 |

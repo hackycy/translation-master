@@ -1070,6 +1070,29 @@ describe('i18n migrate workflow', () => {
     expect(await readFile(sourcePath, 'utf8')).toBe('<template><button>{{ $t(\'views.Login.submit\') }}</button></template>\n')
   })
 
+  it('prefixes full adapt key references with the convert namespace', async () => {
+    const cwd = await createTempProject()
+    const sourcePath = path.join(cwd, 'src', 'views', 'Login.vue')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, '<template><button>提交</button></template>\n', 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    const configPath = path.join(cwd, '.tmigrate', 'config.json')
+    const config = JSON.parse(await readFile(configPath, 'utf8')) as { adapt?: Record<string, unknown>, convert?: Record<string, unknown> }
+    config.convert = { namespace: 'admin/app' }
+    config.adapt = { keyReference: { mode: 'full', separator: '.' } }
+    await writeFile(configPath, JSON.stringify(config, null, 2), 'utf8')
+
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+    await approveTranslations({ cwd })
+    const result = await adaptSources({ cwd })
+
+    expect(result.files[0]?.changes).toMatchObject([
+      { key: 'admin.app.views.Login.submit', replacement: '{{ $t(\'admin.app.views.Login.submit\') }}' },
+    ])
+    expect(await readFile(sourcePath, 'utf8')).toBe('<template><button>{{ $t(\'admin.app.views.Login.submit\') }}</button></template>\n')
+  })
+
   it('seeds glossary presets without clobbering existing manual terms by default', async () => {
     const cwd = await createTempProject()
     await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })

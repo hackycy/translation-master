@@ -1080,16 +1080,27 @@ function keyReference(sourcePath: string, key: string, config: AdaptConfig): str
   if (config.keyReference.mode === 'local')
     return key
 
+  const separator = config.keyReference.separator
+  const namespace = namespaceSegments(config.keyReference.namespace)
   const modulePath = sourcePath
     .replace(/^(?:src|source)\//, '')
     .replace(/\.[^.]+$/, '')
     .split('/')
     .filter(Boolean)
-    .join(config.keyReference.separator)
+  const segments = [...namespace, ...modulePath, key]
 
-  return modulePath
-    ? `${modulePath}${config.keyReference.separator}${key}`
-    : key
+  return segments.join(separator)
+}
+
+function namespaceSegments(namespace: string | undefined): string[] {
+  if (!namespace)
+    return []
+
+  return namespace
+    .replace(/\\/g, '/')
+    .split('/')
+    .map(part => part.trim())
+    .filter(Boolean)
 }
 
 function paramsForSegment(segment: TextSegment): AdaptParam[] {

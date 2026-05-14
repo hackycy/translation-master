@@ -80,7 +80,7 @@ const DEFAULT_ADAPT_CONFIG: AdaptConfig = {
     default: 't',
   },
   keyReference: {
-    mode: 'local',
+    mode: 'full',
     separator: '.',
   },
   runtime: {
@@ -153,6 +153,7 @@ export function defineConfig(config: MigrateConfigInput): MigrateConfig {
     keyReference: {
       ...DEFAULT_ADAPT_CONFIG.keyReference,
       ...config.adapt?.keyReference,
+      namespace: config.adapt?.keyReference?.namespace ?? convert.namespace,
     },
     runtime: {
       vue: resolveVueRuntimeConfig(config.adapt?.runtime?.vue),
