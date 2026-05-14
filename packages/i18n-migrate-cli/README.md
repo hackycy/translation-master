@@ -233,7 +233,11 @@ tmigrate adapt src --strategy ast
 
 - Vue 模板文本：`提交` -> `{{ $t('submit') }}`
 - Vue 静态属性：`tab="消费记录"` -> `:tab="$t('consumptionRecords')"`
-- TS/JS 字符串：`'账号安全'` -> `t('accountSecurity')`
+- Vue 动态模板表达式：`:title="'提交'"` -> `:title="$t('submit')"`
+- Vue `<script setup>` 字符串：`'账号安全'` -> `t('accountSecurity')`，并自动注入 `useI18n`
+- Vue Options API 方法内字符串：`'账号安全'` -> `this.$t('accountSecurity')`
+- Vue TSX 文本/属性：`<ElButton title="提交">保存</ElButton>` -> `<ElButton title={t('submit')}>{t('save')}</ElButton>`
+- TS/JS 字符串：配置 `adapt.runtime.script.import.source` / `named` 后改写为 `t('accountSecurity')` 并自动注入 import
 
 带插值的 Vue 模板文本会转换成具名参数调用，例如 `最大上传{{ fileMax }}张图片` -> `{{ $t('maxUploadImages', { fileMax }) }}`。
 
@@ -245,7 +249,7 @@ tmigrate adapt src --strategy ast
 | `--dry-run` | 只打印 diff，不写入源码 |
 | `--strategy <strategy>` | 改写策略：`ast`、`range`，当前默认使用安全范围改写 |
 
-`adapt` 不会自动注入 script runtime、import 语句或 `useI18n()` 绑定。生成脚本调用前，请先在目标文件中按项目约定准备好 `t` 或自定义 `adapt.callee.script` 对应的函数。
+`adapt` 会为 Vue `<script setup>` 和普通 `<script>` 里的 `setup()` 自动注入 `useI18n()` 绑定。普通 TS/JS 模块默认不会凭空注入 runtime；需要在 `adapt.runtime.script.import` 中配置 `source`、`named` 和可选 `local`，或者源码中已有同名 `t` 绑定。没有可靠运行时上下文的字符串会被跳过，留给人工处理。
 
 #### 回写转义策略
 
@@ -386,6 +390,22 @@ tmigrate restore
     "keyReference": {
       "mode": "local",
       "separator": "."
+    },
+    "runtime": {
+      "vue": {
+        "import": {
+          "source": "vue-i18n",
+          "named": "useI18n"
+        },
+        "autoImport": true
+      },
+      "script": {
+        "import": {
+          "source": "@/i18n",
+          "named": "t",
+          "local": "t"
+        }
+      }
     }
   },
   "translatorOptions": {

@@ -1,9 +1,22 @@
-import type { AdaptConfig, ConvertConfig, GlossaryPresetSourceConfig, MigrateConfig, TranslatorOptions } from './types'
+import type { AdaptConfig, AdaptRuntimeImportConfig, ConvertConfig, GlossaryPresetSourceConfig, MigrateConfig, TranslatorOptions } from './types'
 import path from 'node:path'
 import process from 'node:process'
 import { readJsonFile } from './fs-utils'
 
 const DEFAULT_GLOSSARY_PRESET_REPO_URL = 'https://github.com/hackycy/translation-master/tree/main/packages/i18n-migrate-cli'
+
+type AdaptVueRuntimeInput = Partial<Omit<AdaptConfig['runtime']['vue'], 'import'>> & {
+  import?: Partial<AdaptRuntimeImportConfig>
+  importSource?: string
+  useI18n?: string
+}
+
+type AdaptScriptRuntimeInput = Partial<Omit<AdaptConfig['runtime']['script'], 'import'>> & {
+  import?: Partial<AdaptRuntimeImportConfig>
+  importSource?: string
+  imported?: string
+  local?: string
+}
 
 export type MigrateConfigInput = Omit<Partial<MigrateConfig>, 'convert' | 'translatorOptions' | 'glossaryPresets'> & {
   translatorOptions?: Partial<TranslatorOptions>
@@ -12,6 +25,10 @@ export type MigrateConfigInput = Omit<Partial<MigrateConfig>, 'convert' | 'trans
   adapt?: Partial<AdaptConfig> & {
     callee?: Partial<AdaptConfig['callee']>
     keyReference?: Partial<AdaptConfig['keyReference']>
+    runtime?: Partial<AdaptConfig['runtime']> & {
+      vue?: AdaptVueRuntimeInput
+      script?: AdaptScriptRuntimeInput
+    }
   }
 }
 
@@ -65,6 +82,16 @@ const DEFAULT_ADAPT_CONFIG: AdaptConfig = {
   keyReference: {
     mode: 'local',
     separator: '.',
+  },
+  runtime: {
+    vue: {
+      import: {
+        source: 'vue-i18n',
+        named: 'useI18n',
+      },
+      autoImport: true,
+    },
+    script: {},
   },
 }
 
@@ -127,6 +154,10 @@ export function defineConfig(config: MigrateConfigInput): MigrateConfig {
       ...DEFAULT_ADAPT_CONFIG.keyReference,
       ...config.adapt?.keyReference,
     },
+    runtime: {
+      vue: resolveVueRuntimeConfig(config.adapt?.runtime?.vue),
+      script: resolveScriptRuntimeConfig(config.adapt?.runtime?.script),
+    },
   }
 
   return {
@@ -143,6 +174,39 @@ export function defineConfig(config: MigrateConfigInput): MigrateConfig {
     convert,
     adapt,
   }
+}
+
+function resolveVueRuntimeConfig(input?: AdaptVueRuntimeInput): AdaptConfig['runtime']['vue'] {
+  const runtime = input ?? {}
+  const legacy = runtime as { importSource?: string, useI18n?: string }
+  return {
+    autoImport: runtime.autoImport ?? DEFAULT_ADAPT_CONFIG.runtime.vue.autoImport,
+    import: {
+      ...DEFAULT_ADAPT_CONFIG.runtime.vue.import,
+      ...runtime.import,
+      source: runtime.import?.source ?? legacy.importSource ?? DEFAULT_ADAPT_CONFIG.runtime.vue.import.source,
+      named: runtime.import?.named ?? legacy.useI18n ?? DEFAULT_ADAPT_CONFIG.runtime.vue.import.named,
+      local: runtime.import?.local,
+    },
+  }
+}
+
+function resolveScriptRuntimeConfig(input?: AdaptScriptRuntimeInput): AdaptConfig['runtime']['script'] {
+  const runtime = input ?? {}
+  const legacy = runtime as { importSource?: string, imported?: string, local?: string }
+  const source = runtime.import?.source ?? legacy.importSource
+  const named = runtime.import?.named ?? legacy.imported
+  const local = runtime.import?.local ?? legacy.local
+
+  return source && named
+    ? {
+        import: {
+          source,
+          named,
+          local,
+        },
+      }
+    : {}
 }
 
 function mergeExcludeWithConvertOutput(exclude: string[], outputDir: string): string[] {

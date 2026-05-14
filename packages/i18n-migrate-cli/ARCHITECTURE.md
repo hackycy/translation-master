@@ -254,10 +254,15 @@ tmigrate adapt src --dry-run
 
 - Vue template 文本：`提交` -> `{{ $t('submit') }}`
 - Vue 静态属性：`tab="消费记录"` -> `:tab="$t('consumptionRecords')"`
-- Vue `<script setup>` / TS / JS 字符串：`'账号安全'` -> `t('accountSecurity')`
+- Vue 动态 template 表达式：`:title="'提交'"` -> `:title="$t('submit')"`
+- Vue `<script setup>` 字符串：`'账号安全'` -> `t('accountSecurity')`，并自动注入 `useI18n`
+- Vue 普通 `<script>` 的 `setup()` 内字符串：自动注入 `useI18n` 后改写为 `t('key')`
+- Vue Options API 方法内字符串：`'账号安全'` -> `this.$t('accountSecurity')`
+- Vue TSX 文本/属性：`<ElButton title="提交">保存</ElButton>` -> `<ElButton title={t('submit')}>{t('save')}</ElButton>`
+- 配置了 `adapt.runtime.script.import.source` / `named` 的 TS / JS 字符串：自动注入 import 后改写为 `t('key')`
 - Vue template 混合插值：`{{ user.name }} 有 {{ stats.total }} 条记录` -> `{{ $t('userRecords', { userName: user.name, statsTotal: stats.total }) }}`
 
-`adapt` 不自动注入 script runtime、import 语句或 `useI18n()` 绑定。脚本字符串改写前，目标文件需要按项目约定自行提供 `t` 或自定义 `adapt.callee.script` 对应的函数。
+`adapt` 不会在没有可靠运行时上下文的位置强行改写。普通 TS/JS 模块需要显式配置 runtime import，Vue 普通 `<script>` 顶层字符串默认跳过。
 
 ### 阶段五：legacy 人工确认 + 直接回写
 
@@ -385,6 +390,22 @@ tmigrate restore --list
     "keyReference": {
       "mode": "local",
       "separator": "."
+    },
+    "runtime": {
+      "vue": {
+        "import": {
+          "source": "vue-i18n",
+          "named": "useI18n"
+        },
+        "autoImport": true
+      },
+      "script": {
+        "import": {
+          "source": "@/i18n",
+          "named": "t",
+          "local": "t"
+        }
+      }
     }
   },
   "translatorOptions": {

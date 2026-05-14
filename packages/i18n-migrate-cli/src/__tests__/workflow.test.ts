@@ -416,6 +416,8 @@ describe('i18n migrate workflow', () => {
     expect(preview.files[0]?.diff).toContain('+  <ATabPane :tab="$t(\'consumptionRecords\')" />')
     expect(preview.files[0]?.diff).toContain('+  <p>{{ $t(\'maxUploadImages\', { fileMax }) }}</p>')
     expect(preview.files[0]?.diff).toContain('+  <p>{{ $t(\'userRecords\', { userName: user.name, statsTotal: stats.total }) }}</p>')
+    expect(preview.files[0]?.diff).toContain('+import { useI18n } from \'vue-i18n\'')
+    expect(preview.files[0]?.diff).toContain('+const { t } = useI18n()')
     expect(preview.files[0]?.diff).toContain('+const title = t(\'accountSecurity\')')
 
     const adapted = await adaptSources({ cwd, path: 'src/components' })
@@ -428,6 +430,8 @@ describe('i18n migrate workflow', () => {
       '  <p>{{ $t(\'userRecords\', { userName: user.name, statsTotal: stats.total }) }}</p>',
       '</template>',
       '<script setup lang="ts">',
+      'import { useI18n } from \'vue-i18n\'',
+      'const { t } = useI18n()',
       'const title = t(\'accountSecurity\')',
       '</script>',
       '',
@@ -459,13 +463,15 @@ describe('i18n migrate workflow', () => {
     expect(await readFile(sourcePath, 'utf8')).toBe([
       '<template><h1>{{ $t(\'accountSecurity\') }}</h1></template>',
       '<script setup lang="ts">',
+      'import { useI18n } from \'vue-i18n\'',
+      'const { t } = useI18n()',
       'const title = t(\'accountSecurity\')',
       '</script>',
       '',
     ].join('\n'))
   })
 
-  it('supports custom script callee without injecting runtime imports', async () => {
+  it('supports custom script callee when injecting Vue i18n runtime', async () => {
     const cwd = await createTempProject()
     const sourcePath = path.join(cwd, 'src', 'views', 'CustomRuntime.vue')
     await mkdir(path.dirname(sourcePath), { recursive: true })
@@ -492,13 +498,56 @@ describe('i18n migrate workflow', () => {
     expect(await readFile(sourcePath, 'utf8')).toBe([
       '<template><h1>{{ $t(\'accountSecurity\') }}</h1></template>',
       '<script setup lang="ts">',
+      'import { useI18n } from \'vue-i18n\'',
+      'const { t: translate } = useI18n()',
       'const title = translate(\'accountSecurity\')',
       '</script>',
       '',
     ].join('\n'))
   })
 
-  it('adapts normal Vue script blocks without injecting runtime imports', async () => {
+  it('supports configured Vue runtime import source, named export, and local alias', async () => {
+    const cwd = await createTempProject()
+    const sourcePath = path.join(cwd, 'src', 'views', 'CustomVueRuntime.vue')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, [
+      '<script setup lang="ts">',
+      'const title = \'账号安全\'',
+      '</script>',
+      '',
+    ].join('\n'), 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    const configPath = path.join(cwd, '.tmigrate', 'config.json')
+    const config = JSON.parse(await readFile(configPath, 'utf8')) as { adapt?: Record<string, unknown> }
+    config.adapt = {
+      runtime: {
+        vue: {
+          import: {
+            source: '@/i18n/runtime',
+            named: 'useTranslation',
+            local: 'useTmigrateI18n',
+          },
+        },
+      },
+    }
+    await writeFile(configPath, JSON.stringify(config, null, 2), 'utf8')
+
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+    await approveTranslations({ cwd })
+    await adaptSources({ cwd })
+
+    expect(await readFile(sourcePath, 'utf8')).toBe([
+      '<script setup lang="ts">',
+      'import { useTranslation as useTmigrateI18n } from \'@/i18n/runtime\'',
+      'const { t } = useTmigrateI18n()',
+      'const title = t(\'accountSecurity\')',
+      '</script>',
+      '',
+    ].join('\n'))
+  })
+
+  it('skips top-level normal Vue script strings that have no runtime context', async () => {
     const cwd = await createTempProject()
     const sourcePath = path.join(cwd, 'src', 'views', 'Options.vue')
     await mkdir(path.dirname(sourcePath), { recursive: true })
@@ -517,13 +566,326 @@ describe('i18n migrate workflow', () => {
 
     const result = await adaptSources({ cwd })
 
-    expect(result.skipped).toEqual([])
+    expect(result.skipped).toMatchObject([{ text: '账号安全', reason: 'unsupported-context' }])
     expect(await readFile(sourcePath, 'utf8')).toBe([
       '<template><h1>{{ $t(\'accountSecurity\') }}</h1></template>',
       '<script lang="ts">',
-      'const title = t(\'accountSecurity\')',
+      'const title = \'账号安全\'',
       'export default { name: \'OptionsPage\' }',
       '</script>',
+      '',
+    ].join('\n'))
+  })
+
+  it('adapts Vue Options API method strings to this.$t calls', async () => {
+    const cwd = await createTempProject()
+    const sourcePath = path.join(cwd, 'src', 'views', 'OptionsMethod.vue')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, [
+      '<script lang="ts">',
+      'export default {',
+      '  methods: {',
+      '    pageTitle() {',
+      '      return \'账号安全\'',
+      '    },',
+      '  },',
+      '}',
+      '</script>',
+      '',
+    ].join('\n'), 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+    await approveTranslations({ cwd })
+
+    const result = await adaptSources({ cwd })
+
+    expect(result.skipped).toEqual([])
+    expect(await readFile(sourcePath, 'utf8')).toBe([
+      '<script lang="ts">',
+      'export default {',
+      '  methods: {',
+      '    pageTitle() {',
+      '      return this.$t(\'accountSecurity\')',
+      '    },',
+      '  },',
+      '}',
+      '</script>',
+      '',
+    ].join('\n'))
+  })
+
+  it('skips non-component object method strings in normal Vue scripts', async () => {
+    const cwd = await createTempProject()
+    const sourcePath = path.join(cwd, 'src', 'views', 'HelperObject.vue')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, [
+      '<script lang="ts">',
+      'const helper = {',
+      '  pageTitle() {',
+      '    return \'账号安全\'',
+      '  },',
+      '}',
+      'export default { name: \'HelperObject\' }',
+      '</script>',
+      '',
+    ].join('\n'), 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+    await approveTranslations({ cwd })
+
+    const result = await adaptSources({ cwd })
+
+    expect(result.skipped).toMatchObject([{ text: '账号安全', reason: 'unsupported-context' }])
+    expect(await readFile(sourcePath, 'utf8')).toBe([
+      '<script lang="ts">',
+      'const helper = {',
+      '  pageTitle() {',
+      '    return \'账号安全\'',
+      '  },',
+      '}',
+      'export default { name: \'HelperObject\' }',
+      '</script>',
+      '',
+    ].join('\n'))
+  })
+
+  it('injects Vue i18n runtime inside normal script setup functions', async () => {
+    const cwd = await createTempProject()
+    const sourcePath = path.join(cwd, 'src', 'views', 'Composition.vue')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, [
+      '<script lang="ts">',
+      'export default {',
+      '  setup() {',
+      '    const title = \'账号安全\'',
+      '    return { title }',
+      '  },',
+      '}',
+      '</script>',
+      '',
+    ].join('\n'), 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+    await approveTranslations({ cwd })
+
+    const result = await adaptSources({ cwd })
+
+    expect(result.skipped).toEqual([])
+    expect(await readFile(sourcePath, 'utf8')).toBe([
+      '<script lang="ts">',
+      'import { useI18n } from \'vue-i18n\'',
+      'export default {',
+      '  setup() {',
+      '    const { t } = useI18n()',
+      '    const title = t(\'accountSecurity\')',
+      '    return { title }',
+      '  },',
+      '}',
+      '</script>',
+      '',
+    ].join('\n'))
+  })
+
+  it('injects configured runtime imports for plain TypeScript modules', async () => {
+    const cwd = await createTempProject()
+    const sourcePath = path.join(cwd, 'src', 'messages.ts')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, 'export const title = \'账号安全\'\n', 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    const configPath = path.join(cwd, '.tmigrate', 'config.json')
+    const config = JSON.parse(await readFile(configPath, 'utf8')) as { adapt?: Record<string, unknown> }
+    config.adapt = {
+      runtime: {
+        script: {
+          import: {
+            source: '@/i18n',
+            named: 't',
+          },
+        },
+      },
+    }
+    await writeFile(configPath, JSON.stringify(config, null, 2), 'utf8')
+
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+    await approveTranslations({ cwd })
+
+    const result = await adaptSources({ cwd })
+
+    expect(result.skipped).toEqual([])
+    expect(await readFile(sourcePath, 'utf8')).toBe([
+      'import { t } from \'@/i18n\'',
+      'export const title = t(\'accountSecurity\')',
+      '',
+    ].join('\n'))
+  })
+
+  it('supports legacy script runtime import config fields', async () => {
+    const cwd = await createTempProject()
+    const sourcePath = path.join(cwd, 'src', 'legacy-runtime.ts')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, 'export const title = \'账号安全\'\n', 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    const configPath = path.join(cwd, '.tmigrate', 'config.json')
+    const config = JSON.parse(await readFile(configPath, 'utf8')) as { adapt?: Record<string, unknown> }
+    config.adapt = {
+      runtime: {
+        script: {
+          importSource: '@/i18n',
+          imported: 'translate',
+          local: 't',
+        },
+      },
+    }
+    await writeFile(configPath, JSON.stringify(config, null, 2), 'utf8')
+
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+    await approveTranslations({ cwd })
+
+    const result = await adaptSources({ cwd })
+
+    expect(result.skipped).toEqual([])
+    expect(await readFile(sourcePath, 'utf8')).toBe([
+      'import { translate as t } from \'@/i18n\'',
+      'export const title = t(\'accountSecurity\')',
+      '',
+    ].join('\n'))
+  })
+
+  it('skips plain TypeScript modules when no runtime is configured', async () => {
+    const cwd = await createTempProject()
+    const sourcePath = path.join(cwd, 'src', 'messages.ts')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, 'export const title = \'账号安全\'\n', 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+    await approveTranslations({ cwd })
+
+    const result = await adaptSources({ cwd })
+
+    expect(result.skipped).toMatchObject([{ text: '账号安全', reason: 'unsupported-context' }])
+    expect(await readFile(sourcePath, 'utf8')).toBe('export const title = \'账号安全\'\n')
+  })
+
+  it('adapts Vue template directive expression strings', async () => {
+    const cwd = await createTempProject()
+    const sourcePath = path.join(cwd, 'src', 'views', 'DynamicTemplate.vue')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, [
+      '<template>',
+      '  <button :title="\'提交\'" v-if="status === \'失败\'" @click="message = \'保存成功\'">保存</button>',
+      '</template>',
+      '',
+    ].join('\n'), 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+
+    const mapPath = path.join(cwd, '.tmigrate', 'maps', 'src', 'views', 'DynamicTemplate.vue.json')
+    const map = JSON.parse(await readFile(mapPath, 'utf8')) as {
+      entries: Record<string, { approved: boolean, translationApproved?: boolean, keyApproved?: boolean, key?: string }>
+    }
+    map.entries['提交']!.key = 'submit'
+    map.entries['失败']!.key = 'failed'
+    map.entries['保存成功']!.key = 'saveSucceeded'
+    map.entries['保存']!.key = 'save'
+    for (const entry of Object.values(map.entries)) {
+      entry.approved = true
+      entry.translationApproved = true
+      entry.keyApproved = true
+    }
+    await writeFile(mapPath, JSON.stringify(map, null, 2), 'utf8')
+
+    const result = await adaptSources({ cwd })
+
+    expect(result.skipped).toEqual([])
+    expect(await readFile(sourcePath, 'utf8')).toBe([
+      '<template>',
+      '  <button :title="$t(\'submit\')" v-if="status === $t(\'failed\')" @click="message = $t(\'saveSucceeded\')">{{ $t(\'save\') }}</button>',
+      '</template>',
+      '',
+    ].join('\n'))
+  })
+
+  it('adapts Vue TSX script setup JSX text and attributes', async () => {
+    const cwd = await createTempProject()
+    const sourcePath = path.join(cwd, 'src', 'views', 'Render.vue')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, [
+      '<script setup lang="tsx">',
+      'const renderButton = () => <ElButton title="提交">{status === \'失败\' ? \'重试\' : \'继续\'}</ElButton>',
+      '</script>',
+      '',
+    ].join('\n'), 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+
+    const mapPath = path.join(cwd, '.tmigrate', 'maps', 'src', 'views', 'Render.vue.json')
+    const map = JSON.parse(await readFile(mapPath, 'utf8')) as {
+      entries: Record<string, { approved: boolean, translationApproved?: boolean, keyApproved?: boolean, key?: string }>
+    }
+    map.entries['提交']!.key = 'submit'
+    map.entries['失败']!.key = 'failed'
+    map.entries['重试']!.key = 'retry'
+    map.entries['继续']!.key = 'continue'
+    for (const entry of Object.values(map.entries)) {
+      entry.approved = true
+      entry.translationApproved = true
+      entry.keyApproved = true
+    }
+    await writeFile(mapPath, JSON.stringify(map, null, 2), 'utf8')
+
+    const result = await adaptSources({ cwd })
+
+    expect(result.skipped).toEqual([])
+    expect(await readFile(sourcePath, 'utf8')).toBe([
+      '<script setup lang="tsx">',
+      'import { useI18n } from \'vue-i18n\'',
+      'const { t } = useI18n()',
+      'const renderButton = () => <ElButton title={t(\'submit\')}>{status === t(\'failed\') ? t(\'retry\') : t(\'continue\')}</ElButton>',
+      '</script>',
+      '',
+    ].join('\n'))
+  })
+
+  it('adapts plain Vue TSX modules when runtime binding already exists', async () => {
+    const cwd = await createTempProject()
+    const sourcePath = path.join(cwd, 'src', 'render.tsx')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, [
+      'import { t } from \'@/i18n\'',
+      'export const renderButton = () => <ElButton title="提交">保存</ElButton>',
+      '',
+    ].join('\n'), 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+
+    const mapPath = path.join(cwd, '.tmigrate', 'maps', 'src', 'render.tsx.json')
+    const map = JSON.parse(await readFile(mapPath, 'utf8')) as {
+      entries: Record<string, { approved: boolean, translationApproved?: boolean, keyApproved?: boolean, key?: string }>
+    }
+    map.entries['提交']!.key = 'submit'
+    map.entries['保存']!.key = 'save'
+    for (const entry of Object.values(map.entries)) {
+      entry.approved = true
+      entry.translationApproved = true
+      entry.keyApproved = true
+    }
+    await writeFile(mapPath, JSON.stringify(map, null, 2), 'utf8')
+
+    const result = await adaptSources({ cwd })
+
+    expect(result.skipped).toEqual([])
+    expect(await readFile(sourcePath, 'utf8')).toBe([
+      'import { t } from \'@/i18n\'',
+      'export const renderButton = () => <ElButton title={t(\'submit\')}>{t(\'save\')}</ElButton>',
       '',
     ].join('\n'))
   })

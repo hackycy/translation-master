@@ -128,9 +128,30 @@ export interface AdaptKeyReferenceConfig {
   separator: string
 }
 
+export interface AdaptRuntimeImportConfig {
+  source: string
+  named: string
+  local?: string
+}
+
+export interface AdaptVueRuntimeConfig {
+  import: AdaptRuntimeImportConfig
+  autoImport: boolean
+}
+
+export interface AdaptScriptRuntimeConfig {
+  import?: AdaptRuntimeImportConfig
+}
+
+export interface AdaptRuntimeConfig {
+  vue: AdaptVueRuntimeConfig
+  script: AdaptScriptRuntimeConfig
+}
+
 export interface AdaptConfig {
   callee: AdaptCalleeConfig
   keyReference: AdaptKeyReferenceConfig
+  runtime: AdaptRuntimeConfig
 }
 
 export interface MigrateConfig {

@@ -2,6 +2,8 @@ import type { AdaptConfig, AdaptOptions, AdaptResult, AdaptSkip, TextSegment, Tr
 import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
+import { parse as babelParse } from '@babel/parser'
+import { parse as parseVue } from '@vue/compiler-sfc'
 import { backupFile } from './backup'
 import { loadConfig } from './config'
 import { Extractor } from './extractor'
@@ -15,6 +17,7 @@ interface AdaptReplacement {
   start: number
   end: number
   text: string
+  order?: number
 }
 
 interface AdaptFileResult {
@@ -26,6 +29,98 @@ interface AdaptFileResult {
 interface AdaptParam {
   name: string
   expression: string
+}
+
+interface ScriptRuntimePlan {
+  replacements: AdaptReplacement[]
+  vueScriptSetup?: VueSetupRuntime
+  vueScript?: VueScriptRuntime
+  moduleScript?: ModuleScriptRuntime
+}
+
+interface VueSetupRuntime {
+  block: ScriptBlockInfo
+  callee: string
+  useI18nCallee: string
+  hasUseI18nBinding: boolean
+  bindingInserted: boolean
+  importInserted: boolean
+}
+
+interface VueScriptRuntime {
+  block: ScriptBlockInfo
+  setupScopes: SetupScope[]
+  thisScopes: Array<{ start: number, end: number }>
+  useI18nCallee: string
+  importInserted: boolean
+}
+
+interface ModuleScriptRuntime {
+  callee: string
+  importInserted: boolean
+  shouldInjectImport: boolean
+  importConfig?: RuntimeImport
+}
+
+interface ScriptBlockInfo {
+  content: string
+  start: number
+  end: number
+  filePath: string
+  ast?: BabelNode
+  imports: ImportInfo[]
+  bindings: Set<string>
+}
+
+interface SetupScope {
+  start: number
+  end: number
+  bodyStart: number
+  contentStart: number
+  contentEnd: number
+  callee: string
+  hasUseI18nBinding: boolean
+  bindingInserted: boolean
+}
+
+interface ImportInfo {
+  start: number
+  end: number
+  source: string
+  specifiers: Array<{ imported?: string, local: string }>
+}
+
+interface RuntimeImport {
+  source: string
+  named: string
+  local: string
+}
+
+interface BabelNode {
+  type: string
+  start?: number | null
+  end?: number | null
+  body?: unknown
+  declarations?: unknown[]
+  id?: unknown
+  key?: unknown
+  value?: unknown
+  source?: { value?: unknown }
+  specifiers?: unknown[]
+  imported?: unknown
+  local?: unknown
+  name?: unknown
+  params?: unknown[]
+  properties?: unknown[]
+  expression?: unknown
+  callee?: unknown
+  object?: unknown
+  property?: unknown
+  computed?: boolean
+  init?: unknown
+  program?: unknown
+  arguments?: unknown[]
+  declaration?: unknown
 }
 
 export async function adaptSources(options: AdaptOptions = {}): Promise<AdaptResult> {
@@ -84,8 +179,10 @@ export function adaptContent(
   translations: Map<string, TranslationEntry>,
   config: AdaptConfig,
 ): AdaptFileResult {
-  const replacements: AdaptReplacement[] = []
+  const runtimePlan = createScriptRuntimePlan(content, sourcePath, config)
+  const replacements: AdaptReplacement[] = runtimePlan.replacements
   const skipped: AdaptSkip[] = []
+  let applied = 0
 
   for (const segment of segments) {
     const entry = translations.get(segment.text)
@@ -98,22 +195,23 @@ export function adaptContent(
       continue
     }
 
-    const replacement = replacementForSegment(content, sourcePath, segment, entry, config)
+    const replacement = replacementForSegment(content, sourcePath, segment, entry, config, runtimePlan)
     if (!replacement) {
       skipped.push(skip(sourcePath, segment.text, entry.key, 'unsupported-context', 'Rewrite this occurrence manually or adjust adapt configuration.'))
       continue
     }
 
     replacements.push(replacement)
+    applied += 1
   }
 
   let next = content
-  for (const replacement of replacements.sort((left, right) => right.start - left.start))
+  for (const replacement of replacements.sort((left, right) => right.start - left.start || (right.order ?? 0) - (left.order ?? 0)))
     next = `${next.slice(0, replacement.start)}${replacement.text}${next.slice(replacement.end)}`
 
   return {
     content: next,
-    applied: replacements.length,
+    applied,
     skipped,
   }
 }
@@ -124,6 +222,7 @@ function replacementForSegment(
   segment: TextSegment,
   entry: TranslationEntry,
   config: AdaptConfig,
+  runtimePlan: ScriptRuntimePlan,
 ): AdaptReplacement | undefined {
   const key = keyReference(sourcePath, entry.key!, config)
   const params = paramsForSegment(segment)
@@ -147,9 +246,37 @@ function replacementForSegment(
       : undefined
   }
 
+  if (sourcePath.endsWith('.vue') && segment.context === 'template' && segment.nodeType === 'VueDirectiveStringLiteral') {
+    return scriptStringReplacement(content, segment, callExpression(config.callee.vue, key, params))
+  }
+
   if (segment.context === 'script' && segment.nodeType === 'StringLiteral') {
-    const replacement = scriptStringReplacement(content, segment, callExpression(config.callee.script, key, params))
+    const callee = scriptCalleeForSegment(segment, runtimePlan)
+    if (!callee)
+      return undefined
+
+    const replacement = scriptStringReplacement(content, segment, callExpression(callee, key, params))
     return replacement
+  }
+
+  if (segment.context === 'script' && segment.nodeType === 'JSXStringLiteral') {
+    const callee = scriptCalleeForSegment(segment, runtimePlan)
+    if (!callee)
+      return undefined
+
+    return jsxAttributeStringReplacement(content, segment, callExpression(callee, key, params))
+  }
+
+  if (segment.context === 'script' && segment.nodeType === 'JSXText') {
+    const callee = scriptCalleeForSegment(segment, runtimePlan)
+    if (!callee)
+      return undefined
+
+    return {
+      start: segment.start,
+      end: segment.end,
+      text: `{${callExpression(callee, key, params)}}`,
+    }
   }
 
   return undefined
@@ -166,6 +293,651 @@ function scriptStringReplacement(content: string, segment: TextSegment, expressi
     end: segment.end + 1,
     text: expression,
   }
+}
+
+function jsxAttributeStringReplacement(content: string, segment: TextSegment, expression: string): AdaptReplacement | undefined {
+  const quote = content[segment.start - 1]
+  const after = content[segment.end]
+  if (!quote || quote !== after || (quote !== '\'' && quote !== '"'))
+    return undefined
+
+  return {
+    start: segment.start - 1,
+    end: segment.end + 1,
+    text: `{${expression}}`,
+  }
+}
+
+function createScriptRuntimePlan(content: string, sourcePath: string, config: AdaptConfig): ScriptRuntimePlan {
+  if (sourcePath.endsWith('.vue'))
+    return createVueScriptRuntimePlan(content, sourcePath, config)
+
+  if (isScriptPath(sourcePath))
+    return createModuleScriptRuntimePlan(content, sourcePath, config)
+
+  return { replacements: [] }
+}
+
+function createVueScriptRuntimePlan(content: string, sourcePath: string, config: AdaptConfig): ScriptRuntimePlan {
+  const descriptor = parseVue(content, { sourceMap: true }).descriptor
+  const replacements: AdaptReplacement[] = []
+  const plan: ScriptRuntimePlan = { replacements }
+
+  if (descriptor.scriptSetup) {
+    const block = createScriptBlockInfo(
+      descriptor.scriptSetup.content,
+      descriptor.scriptSetup.loc.start.offset,
+      scriptBlockPath(sourcePath, descriptor.scriptSetup.lang),
+    )
+    const useI18nCallee = resolveUseI18nCallee(block, config)
+    const existingBinding = findUseI18nBinding(block, useI18nCallee, config.callee.script)
+    const callee = existingBinding ?? uniqueIdentifier(config.callee.script, block.bindings)
+    const runtime: VueSetupRuntime = {
+      block,
+      callee,
+      useI18nCallee,
+      hasUseI18nBinding: Boolean(existingBinding),
+      bindingInserted: false,
+      importInserted: false,
+    }
+
+    ensureVueUseI18nImport(replacements, block, useI18nCallee, config, runtime)
+    if (!runtime.hasUseI18nBinding) {
+      replacements.push({
+        start: scriptBlockInsertOffset(content, block),
+        end: scriptBlockInsertOffset(content, block),
+        text: `${useI18nBindingStatement('t', callee, useI18nCallee)}\n`,
+        order: 2,
+      })
+      runtime.bindingInserted = true
+      block.bindings.add(callee)
+    }
+
+    plan.vueScriptSetup = runtime
+  }
+
+  if (descriptor.script) {
+    const block = createScriptBlockInfo(
+      descriptor.script.content,
+      descriptor.script.loc.start.offset,
+      scriptBlockPath(sourcePath, descriptor.script.lang),
+    )
+    const useI18nCallee = resolveUseI18nCallee(block, config)
+    const runtime: VueScriptRuntime = {
+      block,
+      setupScopes: createSetupScopes(block, useI18nCallee, config),
+      thisScopes: createOptionsThisScopes(block),
+      useI18nCallee,
+      importInserted: false,
+    }
+
+    if (runtime.setupScopes.some(scope => !scope.hasUseI18nBinding))
+      ensureVueUseI18nImport(replacements, block, useI18nCallee, config, runtime)
+
+    for (const scope of runtime.setupScopes) {
+      if (scope.hasUseI18nBinding)
+        continue
+
+      replacements.push({
+        start: scope.bodyStart,
+        end: scope.bodyStart,
+        text: `\n${indentAt(content, scope.bodyStart)}  ${useI18nBindingStatement('t', scope.callee, useI18nCallee)}`,
+      })
+      scope.bindingInserted = true
+    }
+
+    plan.vueScript = runtime
+  }
+
+  return plan
+}
+
+function createModuleScriptRuntimePlan(content: string, sourcePath: string, config: AdaptConfig): ScriptRuntimePlan {
+  const replacements: AdaptReplacement[] = []
+  const block = createScriptBlockInfo(content, 0, sourcePath)
+  const importConfig = scriptRuntimeImport(config)
+  const local = importConfig?.local ?? config.callee.script
+  const existingImport = importConfig
+    ? findNamedImportLocal(block, importConfig.source, importConfig.named)
+    : undefined
+  const hasExistingRuntime = block.bindings.has(local)
+  const callee = existingImport ?? local
+  if (!importConfig && !hasExistingRuntime) {
+    return {
+      replacements,
+    }
+  }
+
+  const runtime: ModuleScriptRuntime = {
+    callee,
+    importConfig,
+    importInserted: false,
+    shouldInjectImport: Boolean(importConfig && !existingImport),
+  }
+
+  if (runtime.shouldInjectImport && runtime.importConfig) {
+    replacements.push({
+      start: moduleImportInsertOffset(block),
+      end: moduleImportInsertOffset(block),
+      text: `import { ${importSpecifier(runtime.importConfig.named, callee)} } from '${runtime.importConfig.source}'\n`,
+    })
+    runtime.importInserted = true
+  }
+
+  return {
+    replacements,
+    moduleScript: runtime,
+  }
+}
+
+function scriptCalleeForSegment(segment: TextSegment, runtimePlan: ScriptRuntimePlan): string | undefined {
+  if (runtimePlan.vueScriptSetup && contains(runtimePlan.vueScriptSetup.block, segment.start))
+    return runtimePlan.vueScriptSetup.callee
+
+  if (runtimePlan.vueScript && contains(runtimePlan.vueScript.block, segment.start)) {
+    const setupScope = runtimePlan.vueScript.setupScopes.find(scope => segment.start >= scope.contentStart && segment.start <= scope.contentEnd)
+    if (setupScope)
+      return setupScope.callee
+
+    if (runtimePlan.vueScript.thisScopes.some(scope => segment.start >= scope.start && segment.start <= scope.end))
+      return 'this.$t'
+
+    return undefined
+  }
+
+  return runtimePlan.moduleScript?.callee
+}
+
+function createScriptBlockInfo(content: string, start: number, filePath: string): ScriptBlockInfo {
+  const ast = parseScriptAst(content, filePath)
+  const imports = ast ? collectImports(ast, start) : []
+  const bindings = ast ? collectTopLevelBindings(ast) : new Set<string>()
+  return {
+    content,
+    start,
+    end: start + content.length,
+    filePath,
+    ast,
+    imports,
+    bindings,
+  }
+}
+
+function parseScriptAst(content: string, filePath: string): BabelNode | undefined {
+  try {
+    return babelParse(content, {
+      sourceType: 'unambiguous',
+      plugins: parserPlugins(filePath),
+      errorRecovery: true,
+    }) as unknown as BabelNode
+  }
+  catch {
+    return undefined
+  }
+}
+
+function parserPlugins(filePath: string): Array<'typescript' | 'jsx' | 'decorators-legacy'> {
+  const lower = filePath.toLowerCase()
+  const plugins: Array<'typescript' | 'jsx' | 'decorators-legacy'> = ['typescript', 'decorators-legacy']
+  if (lower.endsWith('.tsx') || lower.endsWith('.jsx'))
+    plugins.splice(1, 0, 'jsx')
+  return plugins
+}
+
+function collectImports(ast: BabelNode, offset: number): ImportInfo[] {
+  return programBody(ast)
+    .filter(node => node.type === 'ImportDeclaration' && typeof node.start === 'number' && typeof node.end === 'number')
+    .map((node) => {
+      const specifiers = (node.specifiers ?? [])
+        .filter(isBabelNode)
+        .map(specifier => ({
+          imported: identifierName(specifier.imported),
+          local: identifierName(specifier.local) ?? '',
+        }))
+        .filter(specifier => specifier.local)
+
+      return {
+        start: offset + (node.start ?? 0),
+        end: offset + (node.end ?? 0),
+        source: typeof node.source?.value === 'string' ? node.source.value : '',
+        specifiers,
+      }
+    })
+}
+
+function collectTopLevelBindings(ast: BabelNode): Set<string> {
+  const bindings = new Set<string>()
+  for (const node of programBody(ast)) {
+    if (node.type === 'ImportDeclaration') {
+      for (const specifier of (node.specifiers ?? []).filter(isBabelNode)) {
+        const name = identifierName(specifier.local)
+        if (name)
+          bindings.add(name)
+      }
+    }
+
+    if (node.type === 'VariableDeclaration') {
+      for (const declaration of (node.declarations ?? []).filter(isBabelNode))
+        collectPatternNames(declaration.id, bindings)
+    }
+
+    if (node.type === 'FunctionDeclaration' || node.type === 'ClassDeclaration') {
+      const name = identifierName(node.id)
+      if (name)
+        bindings.add(name)
+    }
+  }
+  return bindings
+}
+
+function collectPatternNames(pattern: unknown, names: Set<string>): void {
+  if (!isBabelNode(pattern))
+    return
+
+  if (pattern.type === 'Identifier') {
+    const name = identifierName(pattern)
+    if (name)
+      names.add(name)
+    return
+  }
+
+  for (const value of Object.values(pattern)) {
+    if (Array.isArray(value)) {
+      for (const child of value)
+        collectPatternNames(child, names)
+    }
+    else {
+      collectPatternNames(value, names)
+    }
+  }
+}
+
+function resolveUseI18nCallee(block: ScriptBlockInfo, config: AdaptConfig): string {
+  const vueImport = vueRuntimeImport(config)
+  return findNamedImportLocal(block, vueImport.source, vueImport.named)
+    ?? vueImport.local
+}
+
+function findNamedImportLocal(block: ScriptBlockInfo, source: string, imported: string): string | undefined {
+  for (const importInfo of block.imports) {
+    if (importInfo.source !== source)
+      continue
+
+    const specifier = importInfo.specifiers.find(item => item.imported === imported || (!item.imported && item.local === imported))
+    if (specifier)
+      return specifier.local
+  }
+  return undefined
+}
+
+function ensureVueUseI18nImport(
+  replacements: AdaptReplacement[],
+  block: ScriptBlockInfo,
+  local: string,
+  config: AdaptConfig,
+  runtime: { importInserted: boolean },
+): void {
+  if (!config.runtime.vue.autoImport)
+    return
+
+  const vueImport = vueRuntimeImport(config)
+  if (findNamedImportLocal(block, vueImport.source, vueImport.named))
+    return
+
+  const sameSourceImport = block.imports.find(item => item.source === vueImport.source)
+  if (sameSourceImport) {
+    replacements.push({
+      start: sameSourceImport.end,
+      end: sameSourceImport.end,
+      text: `\nimport { ${importSpecifier(vueImport.named, local)} } from '${vueImport.source}'`,
+      order: 1,
+    })
+  }
+  else {
+    const insertAt = moduleImportInsertOffset(block)
+    replacements.push({
+      start: insertAt,
+      end: insertAt,
+      text: `import { ${importSpecifier(vueImport.named, local)} } from '${vueImport.source}'\n`,
+      order: 1,
+    })
+  }
+  runtime.importInserted = true
+}
+
+function vueRuntimeImport(config: AdaptConfig): RuntimeImport {
+  const runtimeImport = config.runtime.vue.import
+  return {
+    source: runtimeImport.source,
+    named: runtimeImport.named,
+    local: runtimeImport.local ?? runtimeImport.named,
+  }
+}
+
+function scriptRuntimeImport(config: AdaptConfig): RuntimeImport | undefined {
+  const runtimeImport = config.runtime.script.import
+  if (!runtimeImport)
+    return undefined
+
+  return {
+    source: runtimeImport.source,
+    named: runtimeImport.named,
+    local: runtimeImport.local ?? runtimeImport.named,
+  }
+}
+
+function createSetupScopes(block: ScriptBlockInfo, useI18nCallee: string, config: AdaptConfig): SetupScope[] {
+  if (!block.ast)
+    return []
+
+  const scopes: SetupScope[] = []
+  visitWithAncestors(block.ast, (node, ancestors) => {
+    if (!isSetupFunctionNode(node, ancestors))
+      return
+
+    const body = isBabelNode(node.body) ? node.body : undefined
+    if (!body || body.type !== 'BlockStatement' || typeof body.start !== 'number' || typeof body.end !== 'number')
+      return
+
+    const existingBinding = findUseI18nBindingInRange(block, block.start + body.start, block.start + body.end, useI18nCallee, config.callee.script)
+    const callee = existingBinding ?? uniqueIdentifier(config.callee.script, block.bindings)
+    if (!existingBinding)
+      block.bindings.add(callee)
+
+    scopes.push({
+      start: block.start + (node.start ?? body.start),
+      end: block.start + (node.end ?? body.end),
+      bodyStart: block.start + body.start + 1,
+      contentStart: block.start + body.start,
+      contentEnd: block.start + body.end,
+      callee,
+      hasUseI18nBinding: Boolean(existingBinding),
+      bindingInserted: false,
+    })
+  })
+
+  return scopes.sort((left, right) => left.start - right.start)
+}
+
+function createOptionsThisScopes(block: ScriptBlockInfo): Array<{ start: number, end: number }> {
+  if (!block.ast)
+    return []
+
+  const scopes: Array<{ start: number, end: number }> = []
+  visitWithAncestors(block.ast, (node, ancestors) => {
+    if (!isOptionsFunctionNode(node, ancestors))
+      return
+
+    if (typeof node.start !== 'number' || typeof node.end !== 'number')
+      return
+
+    scopes.push({
+      start: block.start + node.start,
+      end: block.start + node.end,
+    })
+  })
+
+  return scopes.sort((left, right) => left.start - right.start)
+}
+
+function findUseI18nBinding(block: ScriptBlockInfo, useI18nCallee: string, preferred: string): string | undefined {
+  return findUseI18nBindingInRange(block, block.start, block.end, useI18nCallee, preferred)
+}
+
+function findUseI18nBindingInRange(block: ScriptBlockInfo, start: number, end: number, useI18nCallee: string, preferred: string): string | undefined {
+  if (!block.ast)
+    return undefined
+
+  let fallback: string | undefined
+  visit(block.ast, (node) => {
+    if (fallback && fallback === preferred)
+      return
+
+    if (typeof node.start !== 'number' || typeof node.end !== 'number')
+      return
+
+    const absoluteStart = block.start + node.start
+    const absoluteEnd = block.start + node.end
+    if (absoluteStart < start || absoluteEnd > end || node.type !== 'VariableDeclarator')
+      return
+
+    const init = isBabelNode(node.init) ? node.init : undefined
+    const id = isBabelNode(node.id) ? node.id : undefined
+    if (!id || !init || init.type !== 'CallExpression')
+      return
+
+    const callee = isBabelNode(init.callee) ? init.callee : undefined
+    if (identifierName(callee) !== useI18nCallee)
+      return
+
+    const tName = objectPatternPropertyLocal(id, 't')
+    if (tName === preferred)
+      fallback = tName
+    else if (!fallback && tName)
+      fallback = tName
+  })
+
+  return fallback
+}
+
+function isSetupFunctionNode(node: BabelNode, ancestors: BabelNode[]): boolean {
+  if (!isFunctionLike(node))
+    return false
+
+  const context = functionOptionContext(node, ancestors)
+  return context?.key === 'setup' && isComponentRootObject(context.container, ancestors)
+}
+
+function isOptionsFunctionNode(node: BabelNode, ancestors: BabelNode[]): boolean {
+  if (!isFunctionLike(node))
+    return false
+
+  const context = functionOptionContext(node, ancestors)
+  if (!context || context.key === 'setup')
+    return false
+
+  if (isComponentRootObject(context.container, ancestors))
+    return isRootThisOption(context.key)
+
+  const group = componentOptionGroup(context.container, ancestors)
+  return group === 'methods' || group === 'computed' || group === 'watch'
+}
+
+function functionOptionContext(node: BabelNode, ancestors: BabelNode[]): { key: string, container: BabelNode } | undefined {
+  if (node.type === 'ObjectMethod') {
+    const container = ancestors.at(-1)
+    const key = propertyKeyName(node)
+    return key && container?.type === 'ObjectExpression' ? { key, container } : undefined
+  }
+
+  const property = ancestors.at(-1)
+  const container = ancestors.at(-2)
+  const key = property && (property.type === 'ObjectProperty' || property.type === 'ObjectMethod')
+    ? propertyKeyName(property)
+    : undefined
+
+  return key && container?.type === 'ObjectExpression' ? { key, container } : undefined
+}
+
+function isRootThisOption(key: string): boolean {
+  return key === 'data'
+    || key === 'beforeCreate'
+    || key === 'created'
+    || key === 'beforeMount'
+    || key === 'mounted'
+    || key === 'beforeUpdate'
+    || key === 'updated'
+    || key === 'beforeUnmount'
+    || key === 'unmounted'
+    || key === 'errorCaptured'
+    || key === 'render'
+}
+
+function componentOptionGroup(container: BabelNode, ancestors: BabelNode[]): string | undefined {
+  const property = parentOf(container, ancestors)
+  const root = property ? parentOf(property, ancestors) : undefined
+  if (!property || property.type !== 'ObjectProperty' || root?.type !== 'ObjectExpression')
+    return undefined
+
+  if (!isComponentRootObject(root, ancestors))
+    return undefined
+
+  const key = propertyKeyName(property)
+  return key === 'methods' || key === 'computed' || key === 'watch' ? key : undefined
+}
+
+function isComponentRootObject(node: BabelNode, ancestors: BabelNode[]): boolean {
+  const parent = parentOf(node, ancestors)
+  if (!parent)
+    return false
+
+  if (parent.type === 'ExportDefaultDeclaration')
+    return parent.declaration === node
+
+  if (parent.type !== 'CallExpression')
+    return false
+
+  const callee = isBabelNode(parent.callee) ? parent.callee : undefined
+  return identifierName(callee) === 'defineComponent' && parent.arguments?.[0] === node
+}
+
+function parentOf(node: BabelNode, ancestors: BabelNode[]): BabelNode | undefined {
+  const index = ancestors.indexOf(node)
+  return index > 0 ? ancestors[index - 1] : undefined
+}
+
+function isFunctionLike(node: BabelNode): boolean {
+  return node.type === 'FunctionDeclaration'
+    || node.type === 'FunctionExpression'
+    || node.type === 'ArrowFunctionExpression'
+    || node.type === 'ObjectMethod'
+}
+
+function propertyKeyName(node: BabelNode): string | undefined {
+  return identifierName(node.key)
+}
+
+function objectPatternPropertyLocal(pattern: BabelNode, propertyName: string): string | undefined {
+  if (pattern.type !== 'ObjectPattern')
+    return undefined
+
+  for (const property of (pattern.properties ?? []).filter(isBabelNode)) {
+    if (property.type !== 'ObjectProperty')
+      continue
+
+    if (identifierName(property.key) !== propertyName)
+      continue
+
+    return identifierName(property.value)
+  }
+  return undefined
+}
+
+function useI18nBindingStatement(imported: string, local: string, useI18nCallee: string): string {
+  return imported === local
+    ? `const { ${imported} } = ${useI18nCallee}()`
+    : `const { ${imported}: ${local} } = ${useI18nCallee}()`
+}
+
+function importSpecifier(imported: string, local: string): string {
+  return imported === local ? imported : `${imported} as ${local}`
+}
+
+function moduleImportInsertOffset(block: ScriptBlockInfo): number {
+  const lastImport = block.imports.at(-1)
+  return lastImport ? lastImport.end + 1 : blockContentInsertOffset(block)
+}
+
+function scriptBlockInsertOffset(content: string, block: ScriptBlockInfo): number {
+  return blockContentInsertOffset(block)
+}
+
+function blockContentInsertOffset(block: ScriptBlockInfo): number {
+  return block.content[0] === '\n' ? block.start + 1 : block.start
+}
+
+function scriptBlockPath(filePath: string, lang?: string): string {
+  if (lang === 'tsx')
+    return `${filePath}.tsx`
+  if (lang === 'jsx')
+    return `${filePath}.jsx`
+  return filePath
+}
+
+function isScriptPath(sourcePath: string): boolean {
+  return /\.[cm]?[jt]sx?$/i.test(sourcePath)
+}
+
+function contains(block: ScriptBlockInfo, offset: number): boolean {
+  return offset >= block.start && offset <= block.end
+}
+
+function indentAt(content: string, offset: number): string {
+  const lineStart = content.lastIndexOf('\n', offset - 1) + 1
+  return content.slice(lineStart, offset).match(/^\s*/)?.[0] ?? ''
+}
+
+function uniqueIdentifier(base: string, bindings: Set<string>): string {
+  if (!bindings.has(base))
+    return base
+
+  let index = 1
+  while (bindings.has(`${base}${index}`))
+    index += 1
+  return `${base}${index}`
+}
+
+function programBody(ast: BabelNode): BabelNode[] {
+  const body = isBabelNode(ast.program) ? ast.program.body : ast.body
+  return Array.isArray(body) ? body.filter(isBabelNode) : []
+}
+
+function visit(node: unknown, visitor: (node: BabelNode, parent?: BabelNode) => void, parent?: BabelNode): void {
+  if (!isBabelNode(node))
+    return
+
+  visitor(node, parent)
+
+  for (const [key, value] of Object.entries(node)) {
+    if (key === 'loc' || key === 'start' || key === 'end')
+      continue
+
+    if (Array.isArray(value)) {
+      for (const child of value)
+        visit(child, visitor, node)
+    }
+    else {
+      visit(value, visitor, node)
+    }
+  }
+}
+
+function visitWithAncestors(node: unknown, visitor: (node: BabelNode, ancestors: BabelNode[]) => void, ancestors: BabelNode[] = []): void {
+  if (!isBabelNode(node))
+    return
+
+  visitor(node, ancestors)
+
+  for (const [key, value] of Object.entries(node)) {
+    if (key === 'loc' || key === 'start' || key === 'end')
+      continue
+
+    if (Array.isArray(value)) {
+      for (const child of value)
+        visitWithAncestors(child, visitor, [...ancestors, node])
+    }
+    else {
+      visitWithAncestors(value, visitor, [...ancestors, node])
+    }
+  }
+}
+
+function isBabelNode(value: unknown): value is BabelNode {
+  return Boolean(value && typeof value === 'object' && typeof (value as { type?: unknown }).type === 'string')
+}
+
+function identifierName(node: unknown): string | undefined {
+  return isBabelNode(node) && typeof node.name === 'string' ? node.name : undefined
 }
 
 function staticAttributeRange(content: string, segment: TextSegment): { start: number, end: number, name: string } | undefined {

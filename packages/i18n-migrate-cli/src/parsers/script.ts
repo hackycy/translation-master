@@ -65,7 +65,12 @@ function collectStringSegments(root: BabelNode, content: string, context: TextCo
     seen.add(node)
 
     if (node.type === 'StringLiteral' && shouldExtractStringLiteral(node, parent)) {
-      const segment = createStringLiteralSegment(node, content, context, offset)
+      const segment = createStringLiteralSegment(node, content, context, offset, parent?.type === 'JSXAttribute' ? 'JSXStringLiteral' : 'StringLiteral')
+      if (segment)
+        segments.push(segment)
+    }
+    else if (node.type === 'JSXText') {
+      const segment = createJsxTextSegment(node, content, context, offset)
       if (segment)
         segments.push(segment)
     }
@@ -97,6 +102,7 @@ function createStringLiteralSegment(
   content: string,
   context: TextContext,
   offset: number,
+  nodeType: string,
 ): Omit<TextSegment, 'id'> | undefined {
   if (typeof node.start !== 'number' || typeof node.end !== 'number' || typeof node.value !== 'string')
     return undefined
@@ -121,7 +127,37 @@ function createStringLiteralSegment(
     line: position.line,
     column: position.column,
     context,
-    nodeType: 'StringLiteral',
+    nodeType,
+  }
+}
+
+function createJsxTextSegment(
+  node: BabelNode,
+  content: string,
+  context: TextContext,
+  offset: number,
+): Omit<TextSegment, 'id'> | undefined {
+  if (typeof node.start !== 'number' || typeof node.end !== 'number' || typeof node.value !== 'string')
+    return undefined
+
+  const left = leadingSpaces(node.value)
+  const right = node.value.length - node.value.trimEnd().length
+  const trimmedLength = node.value.length - left - right
+  if (trimmedLength <= 0)
+    return undefined
+
+  const text = node.value.trim()
+  const start = node.start + left
+  const end = node.end - right
+  const position = lineColumn(content, start)
+  return {
+    text,
+    start: offset + start,
+    end: offset + end,
+    line: position.line,
+    column: position.column,
+    context,
+    nodeType: 'JSXText',
   }
 }
 
