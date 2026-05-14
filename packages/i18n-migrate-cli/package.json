@@ -1,7 +1,7 @@
 {
   "name": "@translation-master/i18n-migrate-cli",
   "type": "module",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "CLI for extracting and applying source-level i18n migrations",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
