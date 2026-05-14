@@ -438,6 +438,68 @@ describe('i18n migrate workflow', () => {
     ].join('\n'))
   })
 
+  it('does not inject Vue script setup runtime when only template text is adapted', async () => {
+    const cwd = await createTempProject()
+    const sourcePath = path.join(cwd, 'src', 'views', 'TemplateOnly.vue')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, [
+      '<template><h1>账号安全</h1></template>',
+      '<script setup lang="ts">',
+      'import { computed } from \'vue\'',
+      'const count = computed(() => 1)',
+      '</script>',
+      '',
+    ].join('\n'), 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+    await approveTranslations({ cwd })
+
+    const result = await adaptSources({ cwd })
+
+    expect(result.skipped).toEqual([])
+    expect(await readFile(sourcePath, 'utf8')).toBe([
+      '<template><h1>{{ $t(\'accountSecurity\') }}</h1></template>',
+      '<script setup lang="ts">',
+      'import { computed } from \'vue\'',
+      'const count = computed(() => 1)',
+      '</script>',
+      '',
+    ].join('\n'))
+  })
+
+  it('inserts Vue script setup runtime after existing imports and adapts simple template literals', async () => {
+    const cwd = await createTempProject()
+    const sourcePath = path.join(cwd, 'src', 'views', 'ScriptSetupImports.vue')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, [
+      '<script setup lang="ts">',
+      'import { computed } from \'vue\'',
+      'const title = `账号安全`',
+      'const label = computed(() => title)',
+      '</script>',
+      '',
+    ].join('\n'), 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+    await approveTranslations({ cwd })
+
+    const result = await adaptSources({ cwd })
+
+    expect(result.skipped).toEqual([])
+    expect(await readFile(sourcePath, 'utf8')).toBe([
+      '<script setup lang="ts">',
+      'import { computed } from \'vue\'',
+      'import { useI18n } from \'vue-i18n\'',
+      'const { t } = useI18n()',
+      'const title = t(\'accountSecurity\')',
+      'const label = computed(() => title)',
+      '</script>',
+      '',
+    ].join('\n'))
+  })
+
   it('adapts one pending file by default and records completed maps', async () => {
     const cwd = await createTempProject()
     const appPath = path.join(cwd, 'src', 'App.vue')
@@ -667,6 +729,40 @@ describe('i18n migrate workflow', () => {
       '      return this.$t(\'accountSecurity\')',
       '    },',
       '  },',
+      '}',
+      '</script>',
+      '',
+    ].join('\n'))
+  })
+
+  it('skips Vue Options API arrow function strings because this.$t is unavailable', async () => {
+    const cwd = await createTempProject()
+    const sourcePath = path.join(cwd, 'src', 'views', 'OptionsArrow.vue')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, [
+      '<script lang="ts">',
+      'export default {',
+      '  data: () => ({',
+      '    title: \'账号安全\',',
+      '  }),',
+      '}',
+      '</script>',
+      '',
+    ].join('\n'), 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+    await approveTranslations({ cwd })
+
+    const result = await adaptSources({ cwd })
+
+    expect(result.skipped).toMatchObject([{ text: '账号安全', reason: 'unsupported-context' }])
+    expect(await readFile(sourcePath, 'utf8')).toBe([
+      '<script lang="ts">',
+      'export default {',
+      '  data: () => ({',
+      '    title: \'账号安全\',',
+      '  }),',
       '}',
       '</script>',
       '',

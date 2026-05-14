@@ -62,6 +62,7 @@ interface VueScriptRuntime {
 }
 
 interface ModuleScriptRuntime {
+  block: ScriptBlockInfo
   callee: string
   importInserted: boolean
   shouldInjectImport: boolean
@@ -286,7 +287,7 @@ function replacementForSegment(
   }
 
   if (segment.context === 'script' && segment.nodeType === 'StringLiteral') {
-    const callee = scriptCalleeForSegment(segment, runtimePlan)
+    const callee = scriptCalleeForSegment(content, segment, runtimePlan, config)
     if (!callee)
       return undefined
 
@@ -295,7 +296,7 @@ function replacementForSegment(
   }
 
   if (segment.context === 'script' && segment.nodeType === 'JSXStringLiteral') {
-    const callee = scriptCalleeForSegment(segment, runtimePlan)
+    const callee = scriptCalleeForSegment(content, segment, runtimePlan, config)
     if (!callee)
       return undefined
 
@@ -303,7 +304,7 @@ function replacementForSegment(
   }
 
   if (segment.context === 'script' && segment.nodeType === 'JSXText') {
-    const callee = scriptCalleeForSegment(segment, runtimePlan)
+    const callee = scriptCalleeForSegment(content, segment, runtimePlan, config)
     if (!callee)
       return undefined
 
@@ -312,6 +313,14 @@ function replacementForSegment(
       end: segment.end,
       text: `{${callExpression(callee, key, params)}}`,
     }
+  }
+
+  if (segment.context === 'script' && segment.nodeType === 'TemplateElement') {
+    const callee = scriptCalleeForSegment(content, segment, runtimePlan, config)
+    if (!callee)
+      return undefined
+
+    return scriptTemplateElementReplacement(content, segment, callExpression(callee, key, params))
   }
 
   return undefined
@@ -340,6 +349,19 @@ function jsxAttributeStringReplacement(content: string, segment: TextSegment, ex
     start: segment.start - 1,
     end: segment.end + 1,
     text: `{${expression}}`,
+  }
+}
+
+function scriptTemplateElementReplacement(content: string, segment: TextSegment, expression: string): AdaptReplacement | undefined {
+  const before = content[segment.start - 1]
+  const after = content[segment.end]
+  if (before !== '`' || after !== '`')
+    return undefined
+
+  return {
+    start: segment.start - 1,
+    end: segment.end + 1,
+    text: expression,
   }
 }
 
@@ -376,18 +398,6 @@ function createVueScriptRuntimePlan(content: string, sourcePath: string, config:
       importInserted: false,
     }
 
-    ensureVueUseI18nImport(replacements, block, useI18nCallee, config, runtime)
-    if (!runtime.hasUseI18nBinding) {
-      replacements.push({
-        start: scriptBlockInsertOffset(content, block),
-        end: scriptBlockInsertOffset(content, block),
-        text: `${useI18nBindingStatement('t', callee, useI18nCallee)}\n`,
-        order: 2,
-      })
-      runtime.bindingInserted = true
-      block.bindings.add(callee)
-    }
-
     plan.vueScriptSetup = runtime
   }
 
@@ -404,21 +414,6 @@ function createVueScriptRuntimePlan(content: string, sourcePath: string, config:
       thisScopes: createOptionsThisScopes(block),
       useI18nCallee,
       importInserted: false,
-    }
-
-    if (runtime.setupScopes.some(scope => !scope.hasUseI18nBinding))
-      ensureVueUseI18nImport(replacements, block, useI18nCallee, config, runtime)
-
-    for (const scope of runtime.setupScopes) {
-      if (scope.hasUseI18nBinding)
-        continue
-
-      replacements.push({
-        start: scope.bodyStart,
-        end: scope.bodyStart,
-        text: `\n${indentAt(content, scope.bodyStart)}  ${useI18nBindingStatement('t', scope.callee, useI18nCallee)}`,
-      })
-      scope.bindingInserted = true
     }
 
     plan.vueScript = runtime
@@ -444,19 +439,11 @@ function createModuleScriptRuntimePlan(content: string, sourcePath: string, conf
   }
 
   const runtime: ModuleScriptRuntime = {
+    block,
     callee,
     importConfig,
     importInserted: false,
     shouldInjectImport: Boolean(importConfig && !existingImport),
-  }
-
-  if (runtime.shouldInjectImport && runtime.importConfig) {
-    replacements.push({
-      start: moduleImportInsertOffset(block),
-      end: moduleImportInsertOffset(block),
-      text: `import { ${importSpecifier(runtime.importConfig.named, callee)} } from '${runtime.importConfig.source}'\n`,
-    })
-    runtime.importInserted = true
   }
 
   return {
@@ -465,14 +452,23 @@ function createModuleScriptRuntimePlan(content: string, sourcePath: string, conf
   }
 }
 
-function scriptCalleeForSegment(segment: TextSegment, runtimePlan: ScriptRuntimePlan): string | undefined {
-  if (runtimePlan.vueScriptSetup && contains(runtimePlan.vueScriptSetup.block, segment.start))
+function scriptCalleeForSegment(
+  content: string,
+  segment: TextSegment,
+  runtimePlan: ScriptRuntimePlan,
+  config: AdaptConfig,
+): string | undefined {
+  if (runtimePlan.vueScriptSetup && contains(runtimePlan.vueScriptSetup.block, segment.start)) {
+    ensureVueScriptSetupRuntime(runtimePlan.replacements, runtimePlan.vueScriptSetup, config)
     return runtimePlan.vueScriptSetup.callee
+  }
 
   if (runtimePlan.vueScript && contains(runtimePlan.vueScript.block, segment.start)) {
     const setupScope = runtimePlan.vueScript.setupScopes.find(scope => segment.start >= scope.contentStart && segment.start <= scope.contentEnd)
-    if (setupScope)
+    if (setupScope) {
+      ensureVueSetupScopeRuntime(content, runtimePlan.replacements, runtimePlan.vueScript, setupScope, config)
       return setupScope.callee
+    }
 
     if (runtimePlan.vueScript.thisScopes.some(scope => segment.start >= scope.start && segment.start <= scope.end))
       return 'this.$t'
@@ -480,7 +476,63 @@ function scriptCalleeForSegment(segment: TextSegment, runtimePlan: ScriptRuntime
     return undefined
   }
 
-  return runtimePlan.moduleScript?.callee
+  if (runtimePlan.moduleScript) {
+    ensureModuleScriptRuntime(runtimePlan.replacements, runtimePlan.moduleScript)
+    return runtimePlan.moduleScript.callee
+  }
+
+  return undefined
+}
+
+function ensureVueScriptSetupRuntime(
+  replacements: AdaptReplacement[],
+  runtime: VueSetupRuntime,
+  config: AdaptConfig,
+): void {
+  ensureVueUseI18nImport(replacements, runtime.block, runtime.useI18nCallee, config, runtime)
+  if (runtime.hasUseI18nBinding || runtime.bindingInserted)
+    return
+
+  const insertAt = scriptSetupBindingInsertOffset(runtime.block)
+  replacements.push({
+    start: insertAt,
+    end: insertAt,
+    text: `${useI18nBindingStatement('t', runtime.callee, runtime.useI18nCallee)}\n`,
+    order: 2,
+  })
+  runtime.bindingInserted = true
+  runtime.block.bindings.add(runtime.callee)
+}
+
+function ensureVueSetupScopeRuntime(
+  content: string,
+  replacements: AdaptReplacement[],
+  runtime: VueScriptRuntime,
+  scope: SetupScope,
+  config: AdaptConfig,
+): void {
+  ensureVueUseI18nImport(replacements, runtime.block, runtime.useI18nCallee, config, runtime)
+  if (scope.hasUseI18nBinding || scope.bindingInserted)
+    return
+
+  replacements.push({
+    start: scope.bodyStart,
+    end: scope.bodyStart,
+    text: `\n${indentAt(content, scope.bodyStart)}  ${useI18nBindingStatement('t', scope.callee, runtime.useI18nCallee)}`,
+  })
+  scope.bindingInserted = true
+}
+
+function ensureModuleScriptRuntime(replacements: AdaptReplacement[], runtime: ModuleScriptRuntime): void {
+  if (!runtime.shouldInjectImport || !runtime.importConfig || runtime.importInserted)
+    return
+
+  replacements.push({
+    start: moduleImportInsertOffset(runtime.block),
+    end: moduleImportInsertOffset(runtime.block),
+    text: `import { ${importSpecifier(runtime.importConfig.named, runtime.callee)} } from '${runtime.importConfig.source}'\n`,
+  })
+  runtime.importInserted = true
 }
 
 function createScriptBlockInfo(content: string, start: number, filePath: string): ScriptBlockInfo {
@@ -612,6 +664,9 @@ function ensureVueUseI18nImport(
   config: AdaptConfig,
   runtime: { importInserted: boolean },
 ): void {
+  if (runtime.importInserted)
+    return
+
   if (!config.runtime.vue.autoImport)
     return
 
@@ -766,6 +821,8 @@ function isSetupFunctionNode(node: BabelNode, ancestors: BabelNode[]): boolean {
 function isOptionsFunctionNode(node: BabelNode, ancestors: BabelNode[]): boolean {
   if (!isFunctionLike(node))
     return false
+  if (node.type === 'ArrowFunctionExpression')
+    return false
 
   const context = functionOptionContext(node, ancestors)
   if (!context || context.key === 'setup')
@@ -883,8 +940,8 @@ function moduleImportInsertOffset(block: ScriptBlockInfo): number {
   return lastImport ? lastImport.end + 1 : blockContentInsertOffset(block)
 }
 
-function scriptBlockInsertOffset(content: string, block: ScriptBlockInfo): number {
-  return blockContentInsertOffset(block)
+function scriptSetupBindingInsertOffset(block: ScriptBlockInfo): number {
+  return moduleImportInsertOffset(block)
 }
 
 function blockContentInsertOffset(block: ScriptBlockInfo): number {
