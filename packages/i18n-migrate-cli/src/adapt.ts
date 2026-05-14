@@ -1,4 +1,4 @@
-import type { AdaptConfig, AdaptOptions, AdaptResult, AdaptSkip, TextSegment, TranslationEntry } from './types'
+import type { AdaptAppliedChange, AdaptConfig, AdaptOptions, AdaptResult, AdaptSkip, TextSegment, TranslationEntry } from './types'
 import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
@@ -24,6 +24,7 @@ interface AdaptReplacement {
 interface AdaptFileResult {
   content: string
   applied: number
+  changes: AdaptAppliedChange[]
   skipped: AdaptSkip[]
 }
 
@@ -181,6 +182,7 @@ export async function adaptSources(options: AdaptOptions = {}): Promise<AdaptRes
       sourcePath,
       changed,
       applied: adapted.applied,
+      changes: adapted.changes,
       skipped: adapted.skipped,
       diff: options.dryRun ? createUnifiedDiff(sourcePath, content, adapted.content) : undefined,
     })
@@ -218,6 +220,7 @@ export function adaptContent(
   const runtimePlan = createScriptRuntimePlan(content, sourcePath, config)
   const replacements: AdaptReplacement[] = runtimePlan.replacements
   const skipped: AdaptSkip[] = []
+  const changes: AdaptAppliedChange[] = []
   let applied = 0
 
   for (const segment of segments) {
@@ -231,6 +234,7 @@ export function adaptContent(
       continue
     }
 
+    const key = keyReference(sourcePath, entry.key, config)
     const replacement = replacementForSegment(content, sourcePath, segment, entry, config, runtimePlan)
     if (!replacement) {
       skipped.push(skip(sourcePath, segment.text, entry.key, 'unsupported-context', 'Rewrite this occurrence manually or adjust adapt configuration.'))
@@ -238,6 +242,15 @@ export function adaptContent(
     }
 
     replacements.push(replacement)
+    changes.push({
+      sourcePath: toPosixPath(sourcePath),
+      text: segment.text,
+      key,
+      replacement: replacement.text,
+      line: segment.line,
+      column: segment.column,
+      context: segment.context,
+    })
     applied += 1
   }
 
@@ -248,6 +261,7 @@ export function adaptContent(
   return {
     content: next,
     applied,
+    changes,
     skipped,
   }
 }

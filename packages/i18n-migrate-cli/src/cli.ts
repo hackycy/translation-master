@@ -1,4 +1,4 @@
-import type { ScanProgressEvent, WorkflowProgressEvent } from './types'
+import type { AdaptFileChange, AdaptSkip, ScanProgressEvent, WorkflowProgressEvent } from './types'
 import path from 'node:path'
 import process from 'node:process'
 import { Command } from 'commander'
@@ -169,12 +169,15 @@ export function createCli(options: CreateCliOptions): Command {
         console.log(pc.green('No pending source file needs adapt.'))
       }
       else {
+        printAdaptFileDetails(result.files)
         console.log(pc.green(`${result.dryRun ? 'Previewed' : 'Adapted'} ${changed} changed file(s).`))
         if (!command.all)
           console.log(pc.dim('Default adapt processes one pending file at a time. Use `tmigrate adapt --all` to process every ready file.'))
       }
-      if (result.skipped.length > 0)
+      if (result.skipped.length > 0) {
         console.log(pc.yellow(`Skipped ${result.skipped.length} entr${result.skipped.length === 1 ? 'y' : 'ies'} that need manual handling.`))
+        printAdaptSkips(result.skipped)
+      }
     })
 
   program
@@ -441,6 +444,30 @@ function actionLabel(action: 'approve' | 'apply' | 'adapt' | 'restore' | 'conver
   if (action === 'restore')
     return 'Restoring'
   return 'Converting'
+}
+
+function printAdaptFileDetails(files: AdaptFileChange[]): void {
+  for (const file of files) {
+    const state = file.changed ? pc.green('changed') : pc.dim('unchanged')
+    console.log(`${pc.bold(file.sourcePath)} ${state} · applied ${file.applied}, skipped ${file.skipped.length}`)
+
+    for (const change of file.changes) {
+      console.log(pc.dim(`  L${change.line}:C${change.column} [${change.context}] ${compactText(change.text)} -> ${change.replacement}`))
+    }
+  }
+}
+
+function printAdaptSkips(skips: AdaptSkip[]): void {
+  for (const item of skips) {
+    const key = item.key ? ` key=${item.key}` : ''
+    console.log(pc.dim(`  ${item.sourcePath}${key} ${item.reason}: ${compactText(item.text)}. ${item.suggestion}`))
+  }
+}
+
+function compactText(text: string): string {
+  const compact = text.replace(/\s+/g, ' ').trim()
+  const truncated = compact.length > 60 ? `${compact.slice(0, 57)}...` : compact
+  return JSON.stringify(truncated)
 }
 
 function formatModelLoadMessage(

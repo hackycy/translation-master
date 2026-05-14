@@ -268,7 +268,18 @@ export interface AdaptSkip {
   suggestion: string
 }
 
+export interface AdaptAppliedChange {
+  sourcePath: string
+  text: string
+  key: string
+  replacement: string
+  line: number
+  column: number
+  context: TextContext
+}
+
 export interface AdaptFileChange extends FileChange {
+  changes: AdaptAppliedChange[]
   skipped: AdaptSkip[]
 }
 

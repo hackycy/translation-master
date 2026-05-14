@@ -422,6 +422,13 @@ describe('i18n migrate workflow', () => {
 
     const adapted = await adaptSources({ cwd, path: 'src/components' })
     expect(adapted.files).toMatchObject([{ changed: true, applied: 5 }])
+    expect(adapted.files[0]?.changes).toMatchObject([
+      { text: '提交', key: 'submit', replacement: '{{ $t(\'submit\') }}', context: 'template' },
+      { text: '消费记录', key: 'consumptionRecords', replacement: ':tab="$t(\'consumptionRecords\')"', context: 'html-attr' },
+      { text: '最大上传{{ fileMax }}张图片', key: 'maxUploadImages', replacement: '{{ $t(\'maxUploadImages\', { fileMax }) }}', context: 'template' },
+      { text: '{{ user.name }} 有 {{ stats.total }} 条记录', key: 'userRecords', replacement: '{{ $t(\'userRecords\', { userName: user.name, statsTotal: stats.total }) }}', context: 'template' },
+      { text: '账号安全', key: 'accountSecurity', replacement: 't(\'accountSecurity\')', context: 'script' },
+    ])
     expect(await readFile(sourcePath, 'utf8')).toBe([
       '<template>',
       '  <button>{{ $t(\'submit\') }}</button>',
