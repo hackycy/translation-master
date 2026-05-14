@@ -1,4 +1,4 @@
-import type { MigrateConfig, Translator } from '../types'
+import type { MigrateConfig, TranslateOptions, Translator } from '../types'
 import { ApiTranslator } from './api'
 import { LocalTranslator } from './local'
 
@@ -78,6 +78,11 @@ class LazyChromeTranslator implements Translator {
   private loading: Promise<Translator> | null = null
 
   constructor(private readonly options: ConstructorParameters<ChromeTranslatorConstructor>[0]) {}
+
+  async preflight(options: TranslateOptions): Promise<void> {
+    const translator = await this.getTranslator()
+    await translator.preflight?.(options)
+  }
 
   async translate(texts: string[], options: Parameters<Translator['translate']>[1]) {
     return this.getTranslator().then(translator => translator.translate(texts, options))

@@ -340,7 +340,7 @@ function createScanProgressRenderer(): { update: (event: ScanProgressEvent) => v
         return
       }
       if (event.phase === 'model-load') {
-        if (event.state === 'ready' || event.state === 'done')
+        if (event.state === 'ready' || event.state === 'done' || event.state === 'translator-ready' || event.state === 'translator-translated')
           return
         startOrUpdate(formatModelLoadMessage(event, currentFilePath, currentFileIndex, currentFileTotal))
         return
@@ -457,8 +457,10 @@ function formatModelLoadMessage(
   }
   if (event.state === 'translator-create')
     return 'Initializing Chrome Translator'
-  if (event.state === 'translator-download')
-    return 'Waiting for Chrome Translator download progress'
+  if (event.state === 'translator-download') {
+    const progress = event.progress > 0 ? ` ${event.progress}%` : ''
+    return `Waiting for Chrome Translator download progress${progress}`
+  }
   if (event.state === 'translator-timeout')
     return 'Chrome Translator initialization timed out'
   if (event.state === 'translator-ready')

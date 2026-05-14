@@ -311,11 +311,6 @@ export class ChromeTranslator implements Translator {
       const translator = api.__tmigrateTranslator.translator
       const results: string[] = []
       for (const text of texts) {
-        api.__tmigrateReportDownload?.({
-          progress: 0,
-          state: 'translator-download',
-          phase: 'translator',
-        })
         const translated = await Promise.race([
           translator.translate(text),
           new Promise<never>((_, reject) => {
@@ -324,11 +319,6 @@ export class ChromeTranslator implements Translator {
         ])
         results.push(translated)
       }
-      api.__tmigrateReportDownload?.({
-        progress: 100,
-        state: 'translator-translated',
-        phase: 'translator',
-      })
       return results
     }, {
       texts,
