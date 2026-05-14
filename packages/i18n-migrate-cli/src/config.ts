@@ -91,7 +91,13 @@ const DEFAULT_ADAPT_CONFIG: AdaptConfig = {
       },
       autoImport: true,
     },
-    script: {},
+    script: {
+      import: {
+        source: '@/i18n',
+        named: 't',
+        local: 't',
+      },
+    },
   },
 }
 
@@ -195,9 +201,10 @@ function resolveVueRuntimeConfig(input?: AdaptVueRuntimeInput): AdaptConfig['run
 function resolveScriptRuntimeConfig(input?: AdaptScriptRuntimeInput): AdaptConfig['runtime']['script'] {
   const runtime = input ?? {}
   const legacy = runtime as { importSource?: string, imported?: string, local?: string }
-  const source = runtime.import?.source ?? legacy.importSource
-  const named = runtime.import?.named ?? legacy.imported
-  const local = runtime.import?.local ?? legacy.local
+  const defaultImport = DEFAULT_ADAPT_CONFIG.runtime.script.import
+  const source = runtime.import?.source ?? legacy.importSource ?? defaultImport?.source
+  const named = runtime.import?.named ?? legacy.imported ?? defaultImport?.named
+  const local = runtime.import?.local ?? legacy.local ?? defaultImport?.local
 
   return source && named
     ? {

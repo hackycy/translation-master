@@ -238,7 +238,7 @@ tmigrate adapt src --strategy ast
 - Vue `<script setup>` 字符串：`'账号安全'` -> `t('accountSecurity')`，并自动注入 `useI18n`
 - Vue Options API 方法内字符串：`'账号安全'` -> `this.$t('accountSecurity')`
 - Vue TSX 文本/属性：`<ElButton title="提交">保存</ElButton>` -> `<ElButton title={t('submit')}>{t('save')}</ElButton>`
-- TS/JS 字符串：配置 `adapt.runtime.script.import.source` / `named` 后改写为 `t('accountSecurity')` 并自动注入 import
+- TS/JS 字符串：默认从 `@/i18n` 导入 `t`，改写为 `t('accountSecurity')`；也可通过 `adapt.runtime.script.import` 覆盖导入来源
 
 带插值的 Vue 模板文本会转换成具名参数调用，例如 `最大上传{{ fileMax }}张图片` -> `{{ $t('maxUploadImages', { fileMax }) }}`。
 
@@ -255,7 +255,7 @@ tmigrate adapt src --strategy ast
 
 默认情况下，`adapt` 每次只处理下一个待执行文件，并在对应 map 文件里记录本次已执行的批准条目。这样大项目可以逐个文件迁移并用 `tmigrate stats` 查看进度；只有显式传入 `--all` 时才会一次性处理所有就绪文件。
 
-`adapt` 会为 Vue `<script setup>` 和普通 `<script>` 里的 `setup()` 自动注入 `useI18n()` 绑定。普通 TS/JS 模块默认不会凭空注入 runtime；需要在 `adapt.runtime.script.import` 中配置 `source`、`named` 和可选 `local`，或者源码中已有同名 `t` 绑定。没有可靠运行时上下文的字符串会被跳过，留给人工处理。
+`adapt` 会为 Vue `<script setup>` 和普通 `<script>` 里的 `setup()` 自动注入 `useI18n()` 绑定。普通 TS/JS 模块默认会从 `@/i18n` 注入 `t`；如项目使用不同运行时，可在 `adapt.runtime.script.import` 中配置 `source`、`named` 和可选 `local`。没有可靠运行时上下文的字符串会被跳过，留给人工处理。
 
 #### 回写转义策略
 

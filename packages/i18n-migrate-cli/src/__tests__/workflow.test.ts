@@ -412,34 +412,34 @@ describe('i18n migrate workflow', () => {
     await writeFile(mapPath, JSON.stringify(map, null, 2), 'utf8')
 
     const preview = await adaptSources({ cwd, path: 'src/components', dryRun: true })
-    expect(preview.files[0]?.diff).toContain('+  <button>{{ $t(\'submit\') }}</button>')
-    expect(preview.files[0]?.diff).toContain('+  <ATabPane :tab="$t(\'consumptionRecords\')" />')
-    expect(preview.files[0]?.diff).toContain('+  <p>{{ $t(\'maxUploadImages\', { fileMax }) }}</p>')
-    expect(preview.files[0]?.diff).toContain('+  <p>{{ $t(\'userRecords\', { userName: user.name, statsTotal: stats.total }) }}</p>')
+    expect(preview.files[0]?.diff).toContain('+  <button>{{ $t(\'components.Table.submit\') }}</button>')
+    expect(preview.files[0]?.diff).toContain('+  <ATabPane :tab="$t(\'components.Table.consumptionRecords\')" />')
+    expect(preview.files[0]?.diff).toContain('+  <p>{{ $t(\'components.Table.maxUploadImages\', { fileMax }) }}</p>')
+    expect(preview.files[0]?.diff).toContain('+  <p>{{ $t(\'components.Table.userRecords\', { userName: user.name, statsTotal: stats.total }) }}</p>')
     expect(preview.files[0]?.diff).toContain('+import { useI18n } from \'vue-i18n\'')
     expect(preview.files[0]?.diff).toContain('+const { t } = useI18n()')
-    expect(preview.files[0]?.diff).toContain('+const title = t(\'accountSecurity\')')
+    expect(preview.files[0]?.diff).toContain('+const title = t(\'components.Table.accountSecurity\')')
 
     const adapted = await adaptSources({ cwd, path: 'src/components' })
     expect(adapted.files).toMatchObject([{ changed: true, applied: 5 }])
     expect(adapted.files[0]?.changes).toMatchObject([
-      { text: '提交', key: 'submit', replacement: '{{ $t(\'submit\') }}', context: 'template' },
-      { text: '消费记录', key: 'consumptionRecords', replacement: ':tab="$t(\'consumptionRecords\')"', context: 'html-attr' },
-      { text: '最大上传{{ fileMax }}张图片', key: 'maxUploadImages', replacement: '{{ $t(\'maxUploadImages\', { fileMax }) }}', context: 'template' },
-      { text: '{{ user.name }} 有 {{ stats.total }} 条记录', key: 'userRecords', replacement: '{{ $t(\'userRecords\', { userName: user.name, statsTotal: stats.total }) }}', context: 'template' },
-      { text: '账号安全', key: 'accountSecurity', replacement: 't(\'accountSecurity\')', context: 'script' },
+      { text: '提交', key: 'components.Table.submit', replacement: '{{ $t(\'components.Table.submit\') }}', context: 'template' },
+      { text: '消费记录', key: 'components.Table.consumptionRecords', replacement: ':tab="$t(\'components.Table.consumptionRecords\')"', context: 'html-attr' },
+      { text: '最大上传{{ fileMax }}张图片', key: 'components.Table.maxUploadImages', replacement: '{{ $t(\'components.Table.maxUploadImages\', { fileMax }) }}', context: 'template' },
+      { text: '{{ user.name }} 有 {{ stats.total }} 条记录', key: 'components.Table.userRecords', replacement: '{{ $t(\'components.Table.userRecords\', { userName: user.name, statsTotal: stats.total }) }}', context: 'template' },
+      { text: '账号安全', key: 'components.Table.accountSecurity', replacement: 't(\'components.Table.accountSecurity\')', context: 'script' },
     ])
     expect(await readFile(sourcePath, 'utf8')).toBe([
       '<template>',
-      '  <button>{{ $t(\'submit\') }}</button>',
-      '  <ATabPane :tab="$t(\'consumptionRecords\')" />',
-      '  <p>{{ $t(\'maxUploadImages\', { fileMax }) }}</p>',
-      '  <p>{{ $t(\'userRecords\', { userName: user.name, statsTotal: stats.total }) }}</p>',
+      '  <button>{{ $t(\'components.Table.submit\') }}</button>',
+      '  <ATabPane :tab="$t(\'components.Table.consumptionRecords\')" />',
+      '  <p>{{ $t(\'components.Table.maxUploadImages\', { fileMax }) }}</p>',
+      '  <p>{{ $t(\'components.Table.userRecords\', { userName: user.name, statsTotal: stats.total }) }}</p>',
       '</template>',
       '<script setup lang="ts">',
       'import { useI18n } from \'vue-i18n\'',
       'const { t } = useI18n()',
-      'const title = t(\'accountSecurity\')',
+      'const title = t(\'components.Table.accountSecurity\')',
       '</script>',
       '',
     ].join('\n'))
@@ -466,7 +466,7 @@ describe('i18n migrate workflow', () => {
 
     expect(result.skipped).toEqual([])
     expect(await readFile(sourcePath, 'utf8')).toBe([
-      '<template><h1>{{ $t(\'accountSecurity\') }}</h1></template>',
+      '<template><h1>{{ $t(\'views.TemplateOnly.accountSecurity\') }}</h1></template>',
       '<script setup lang="ts">',
       'import { computed } from \'vue\'',
       'const count = computed(() => 1)',
@@ -500,7 +500,7 @@ describe('i18n migrate workflow', () => {
       'import { computed } from \'vue\'',
       'import { useI18n } from \'vue-i18n\'',
       'const { t } = useI18n()',
-      'const title = t(\'accountSecurity\')',
+      'const title = t(\'views.ScriptSetupImports.accountSecurity\')',
       'const label = computed(() => title)',
       '</script>',
       '',
@@ -521,7 +521,7 @@ describe('i18n migrate workflow', () => {
 
     const first = await adaptSources({ cwd })
     expect(first.files).toMatchObject([{ sourcePath: 'src/App.vue', changed: true, applied: 1 }])
-    expect(await readFile(appPath, 'utf8')).toContain('$t(\'submit\')')
+    expect(await readFile(appPath, 'utf8')).toContain('$t(\'App.submit\')')
     expect(await readFile(settingsPath, 'utf8')).toContain('保存设置')
 
     const appMap = JSON.parse(await readFile(path.join(cwd, '.tmigrate', 'maps', 'src', 'App.vue.json'), 'utf8')) as {
@@ -538,7 +538,7 @@ describe('i18n migrate workflow', () => {
 
     const second = await adaptSources({ cwd })
     expect(second.files).toMatchObject([{ sourcePath: 'src/Settings.vue', changed: true, applied: 1 }])
-    expect(await readFile(settingsPath, 'utf8')).toContain('$t(\'saveSettings\')')
+    expect(await readFile(settingsPath, 'utf8')).toContain('$t(\'Settings.saveSettings\')')
 
     const third = await adaptSources({ cwd })
     expect(third.files).toHaveLength(0)
@@ -561,8 +561,8 @@ describe('i18n migrate workflow', () => {
       { sourcePath: 'src/App.vue', changed: true, applied: 1 },
       { sourcePath: 'src/Settings.vue', changed: true, applied: 1 },
     ])
-    expect(await readFile(appPath, 'utf8')).toContain('$t(\'submit\')')
-    expect(await readFile(settingsPath, 'utf8')).toContain('$t(\'saveSettings\')')
+    expect(await readFile(appPath, 'utf8')).toContain('$t(\'App.submit\')')
+    expect(await readFile(settingsPath, 'utf8')).toContain('$t(\'Settings.saveSettings\')')
   })
 
   it('ignores legacy runtime injection config when adapting script setup', async () => {
@@ -588,11 +588,11 @@ describe('i18n migrate workflow', () => {
     await adaptSources({ cwd })
 
     expect(await readFile(sourcePath, 'utf8')).toBe([
-      '<template><h1>{{ $t(\'accountSecurity\') }}</h1></template>',
+      '<template><h1>{{ $t(\'views.Account.accountSecurity\') }}</h1></template>',
       '<script setup lang="ts">',
       'import { useI18n } from \'vue-i18n\'',
       'const { t } = useI18n()',
-      'const title = t(\'accountSecurity\')',
+      'const title = t(\'views.Account.accountSecurity\')',
       '</script>',
       '',
     ].join('\n'))
@@ -623,11 +623,11 @@ describe('i18n migrate workflow', () => {
     await adaptSources({ cwd })
 
     expect(await readFile(sourcePath, 'utf8')).toBe([
-      '<template><h1>{{ $t(\'accountSecurity\') }}</h1></template>',
+      '<template><h1>{{ $t(\'views.CustomRuntime.accountSecurity\') }}</h1></template>',
       '<script setup lang="ts">',
       'import { useI18n } from \'vue-i18n\'',
       'const { t: translate } = useI18n()',
-      'const title = translate(\'accountSecurity\')',
+      'const title = translate(\'views.CustomRuntime.accountSecurity\')',
       '</script>',
       '',
     ].join('\n'))
@@ -668,7 +668,7 @@ describe('i18n migrate workflow', () => {
       '<script setup lang="ts">',
       'import { useTranslation as useTmigrateI18n } from \'@/i18n/runtime\'',
       'const { t } = useTmigrateI18n()',
-      'const title = t(\'accountSecurity\')',
+      'const title = t(\'views.CustomVueRuntime.accountSecurity\')',
       '</script>',
       '',
     ].join('\n'))
@@ -695,7 +695,7 @@ describe('i18n migrate workflow', () => {
 
     expect(result.skipped).toMatchObject([{ text: '账号安全', reason: 'unsupported-context' }])
     expect(await readFile(sourcePath, 'utf8')).toBe([
-      '<template><h1>{{ $t(\'accountSecurity\') }}</h1></template>',
+      '<template><h1>{{ $t(\'views.Options.accountSecurity\') }}</h1></template>',
       '<script lang="ts">',
       'const title = \'账号安全\'',
       'export default { name: \'OptionsPage\' }',
@@ -733,7 +733,7 @@ describe('i18n migrate workflow', () => {
       'export default {',
       '  methods: {',
       '    pageTitle() {',
-      '      return this.$t(\'accountSecurity\')',
+      '      return this.$t(\'views.OptionsMethod.accountSecurity\')',
       '    },',
       '  },',
       '}',
@@ -841,7 +841,7 @@ describe('i18n migrate workflow', () => {
       'export default {',
       '  setup() {',
       '    const { t } = useI18n()',
-      '    const title = t(\'accountSecurity\')',
+      '    const title = t(\'views.Composition.accountSecurity\')',
       '    return { title }',
       '  },',
       '}',
@@ -879,7 +879,7 @@ describe('i18n migrate workflow', () => {
     expect(result.skipped).toEqual([])
     expect(await readFile(sourcePath, 'utf8')).toBe([
       'import { t } from \'@/i18n\'',
-      'export const title = t(\'accountSecurity\')',
+      'export const title = t(\'messages.accountSecurity\')',
       '',
     ].join('\n'))
   })
@@ -912,12 +912,12 @@ describe('i18n migrate workflow', () => {
     expect(result.skipped).toEqual([])
     expect(await readFile(sourcePath, 'utf8')).toBe([
       'import { translate as t } from \'@/i18n\'',
-      'export const title = t(\'accountSecurity\')',
+      'export const title = t(\'legacy-runtime.accountSecurity\')',
       '',
     ].join('\n'))
   })
 
-  it('skips plain TypeScript modules when no runtime is configured', async () => {
+  it('injects default runtime imports for plain TypeScript modules', async () => {
     const cwd = await createTempProject()
     const sourcePath = path.join(cwd, 'src', 'messages.ts')
     await mkdir(path.dirname(sourcePath), { recursive: true })
@@ -929,8 +929,12 @@ describe('i18n migrate workflow', () => {
 
     const result = await adaptSources({ cwd })
 
-    expect(result.skipped).toMatchObject([{ text: '账号安全', reason: 'unsupported-context' }])
-    expect(await readFile(sourcePath, 'utf8')).toBe('export const title = \'账号安全\'\n')
+    expect(result.skipped).toEqual([])
+    expect(await readFile(sourcePath, 'utf8')).toBe([
+      'import { t } from \'@/i18n\'',
+      'export const title = t(\'messages.accountSecurity\')',
+      '',
+    ].join('\n'))
   })
 
   it('adapts Vue template directive expression strings', async () => {
@@ -967,7 +971,7 @@ describe('i18n migrate workflow', () => {
     expect(result.skipped).toEqual([])
     expect(await readFile(sourcePath, 'utf8')).toBe([
       '<template>',
-      '  <button :title="$t(\'submit\')" v-if="status === $t(\'failed\')" @click="message = $t(\'saveSucceeded\')">{{ $t(\'save\') }}</button>',
+      '  <button :title="$t(\'views.DynamicTemplate.submit\')" v-if="status === $t(\'views.DynamicTemplate.failed\')" @click="message = $t(\'views.DynamicTemplate.saveSucceeded\')">{{ $t(\'views.DynamicTemplate.save\') }}</button>',
       '</template>',
       '',
     ].join('\n'))
@@ -1009,7 +1013,7 @@ describe('i18n migrate workflow', () => {
       '<script setup lang="tsx">',
       'import { useI18n } from \'vue-i18n\'',
       'const { t } = useI18n()',
-      'const renderButton = () => <ElButton title={t(\'submit\')}>{status === t(\'failed\') ? t(\'retry\') : t(\'continue\')}</ElButton>',
+      'const renderButton = () => <ElButton title={t(\'views.Render.submit\')}>{status === t(\'views.Render.failed\') ? t(\'views.Render.retry\') : t(\'views.Render.continue\')}</ElButton>',
       '</script>',
       '',
     ].join('\n'))
@@ -1046,7 +1050,7 @@ describe('i18n migrate workflow', () => {
     expect(result.skipped).toEqual([])
     expect(await readFile(sourcePath, 'utf8')).toBe([
       'import { t } from \'@/i18n\'',
-      'export const renderButton = () => <ElButton title={t(\'submit\')}>{t(\'save\')}</ElButton>',
+      'export const renderButton = () => <ElButton title={t(\'render.submit\')}>{t(\'render.save\')}</ElButton>',
       '',
     ].join('\n'))
   })

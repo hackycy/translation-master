@@ -263,10 +263,10 @@ tmigrate adapt src --all
 - Vue 普通 `<script>` 的 `setup()` 内字符串：自动注入 `useI18n` 后改写为 `t('key')`
 - Vue Options API 方法内字符串：`'账号安全'` -> `this.$t('accountSecurity')`
 - Vue TSX 文本/属性：`<ElButton title="提交">保存</ElButton>` -> `<ElButton title={t('submit')}>{t('save')}</ElButton>`
-- 配置了 `adapt.runtime.script.import.source` / `named` 的 TS / JS 字符串：自动注入 import 后改写为 `t('key')`
+- TS / JS 字符串：默认从 `@/i18n` 注入 `t` 后改写为 `t('key')`，也可通过 `adapt.runtime.script.import` 覆盖导入来源
 - Vue template 混合插值：`{{ user.name }} 有 {{ stats.total }} 条记录` -> `{{ $t('userRecords', { userName: user.name, statsTotal: stats.total }) }}`
 
-`adapt` 不会在没有可靠运行时上下文的位置强行改写。普通 TS/JS 模块需要显式配置 runtime import，Vue 普通 `<script>` 顶层字符串默认跳过。
+`adapt` 不会在没有可靠运行时上下文的位置强行改写。普通 TS/JS 模块默认使用 `@/i18n` 的 `t`，Vue 普通 `<script>` 顶层字符串默认跳过。
 
 ### 阶段五：legacy 人工确认 + 直接回写
 
