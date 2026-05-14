@@ -427,6 +427,64 @@ tmigrate restore
 }
 ```
 
+配置文件里的字段可以只保留项目需要调整的部分，未声明的字段会使用 CLI 默认值。常见字段说明如下：
+
+| 字段 | 说明 |
+|---|---|
+| `sourceLocale` | 源语言 locale，即当前源码里的文案语言，例如 `zh`、`en` |
+| `targetLocale` | 目标语言 locale，即希望生成或回写的译文语言，例如 `en`、`zh` |
+| `include` | `scan` 默认扫描范围，支持 glob；命令行传入 `[path]` 时会优先扫描指定路径 |
+| `exclude` | 扫描排除范围。`convert.outputDir` 会自动加入排除列表，避免生成的语言包被重复扫描 |
+| `translator` | 翻译后端：`local` 使用本地 ONNX 模型，`api` 调用 HTTP 服务，`chrome` 使用本机 Chrome 内置 Translator API |
+| `batchSize` | 每个翻译批次的文本数量；接口限流或模型压力较大时可以调小 |
+
+`rules` 用来决定哪些文本会进入 map，适合在扫描阶段过滤无须翻译的内容：
+
+| 规则类型 | `value` 含义 | 示例 |
+|---|---|---|
+| `skip-context` | 跳过指定上下文，可选值包括 `console`、`comment`、`enum`、`test`、`template`、`script`、`style`、`json-value`、`html-text`、`html-attr`、`markdown`、`yaml-value` | `{ "type": "skip-context", "value": "console" }` |
+| `skip-pattern` | 跳过匹配正则的文本 | `{ "type": "skip-pattern", "value": "^[\\d\\s]+$" }` |
+| `force-pattern` | 强制保留匹配正则的文本，优先级高于跳过规则 | `{ "type": "force-pattern", "value": "^[\\u4e00-\\u9fa5]+$" }` |
+| `min-length` | 文本长度小于该值时跳过 | `{ "type": "min-length", "value": 2 }` |
+| `max-length` | 文本长度大于该值时跳过 | `{ "type": "max-length", "value": 120 }` |
+
+`convert` 控制 locale 文件怎么生成：
+
+| 字段 | 说明 |
+|---|---|
+| `outputDir` | locale 输出根目录，默认 `src/locales/langs` |
+| `format` | 输出格式：`json`、`js`、`ts` |
+| `namespace` | 每个语言目录下额外增加的目录层级；也会被 `adapt.keyReference.mode: "full"` 复用为 key 前缀 |
+| `includeSourceLocale` | 是否同时生成源语言包；设为 `false` 时只生成目标语言包 |
+| `translateMissing` | `convert` 遇到已批准但译文为空的条目时，是否复用翻译器补译 |
+| `legacyTextKey` | 是否继续使用原文作为 locale key；默认使用 map 中生成或人工确认的语义 key |
+
+`adapt` 控制源码回写成什么样的 i18n 调用：
+
+| 字段 | 说明 |
+|---|---|
+| `callee.vue` | Vue 模板里的调用名，默认 `$t` |
+| `callee.script` | `<script>`、TS、JS、TSX、JSX 中的调用名，默认 `t` |
+| `callee.default` | 兜底调用名，通常保持为 `t` |
+| `keyReference.mode` | `local` 只写入条目 key，例如 `$t('submit')`；`full` 会拼接 namespace 和源文件路径，例如 `$t('app.views.Login.submit')` |
+| `keyReference.separator` | `full` 模式下 key 片段的连接符，默认 `.` |
+| `runtime.vue.import` | 自动注入 Vue i18n 运行时的导入来源和导入名，默认从 `vue-i18n` 导入 `useI18n` |
+| `runtime.vue.autoImport` | 是否在 Vue `<script setup>` 或 `setup()` 中自动注入 `useI18n()` |
+| `runtime.script.import` | 普通 TS/JS 文件自动注入 `t` 的导入配置，例如从 `@/i18n` 导入具名方法 `t` |
+
+`translatorOptions` 会根据不同翻译后端生效：
+
+| 字段 | 适用后端 | 说明 |
+|---|---|---|
+| `modelBaseUrl` | `local` | 本地模型的下载地址或本地路径；留空时使用默认 HuggingFace 模型源 |
+| `endpoint` | `api` | HTTP 翻译接口地址；`translator` 为 `api` 但未配置时会回退到 `local` |
+| `apiKey` | `api` | API 鉴权 token，接口不需要鉴权时可留空 |
+| `chromeBrowserExecutablePath` | `chrome` | Google Chrome 可执行文件路径；留空时自动查找本机 Stable Chrome |
+| `chromeBrowserVisible` | `chrome` | 是否显示 Chrome 窗口，首次下载内置翻译模型时建议保持 `true` |
+| `timeout` | `api`、`chrome` | 单次请求或浏览器翻译等待超时时间，单位毫秒 |
+| `retries` | 全部 | 机器翻译失败后的重试次数 |
+| `concurrency` | 全部 | 并发翻译批次数；接口有限流时建议调低 |
+
 `glossaryPresets.index` 支持三种写法：
 
 - 本地文件路径，例如 `./tmigrate/glossary/index.json`
