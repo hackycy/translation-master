@@ -7,6 +7,7 @@ import { hashFile, loadScanMeta, saveScanMeta } from './cache'
 import { loadConfig } from './config'
 import { Extractor } from './extractor'
 import { loadGlossary } from './glossary'
+import { assignEntryKeys } from './keygen'
 import { createEntry, mergeMapEntries, readMapFile, writeMapFile } from './mapping'
 import { sourcePathToMapPath, toPosixPath } from './paths'
 import { createTranslator } from './translator'
@@ -86,7 +87,15 @@ export async function scanProject(options: ScanOptions = {}): Promise<ScanResult
       const merged = mergeMapEntries(previousMap, segments, nextEntries, {
         cleanDeprecated: options.cleanDeprecated,
       })
-      const mapFile = await writeMapFile(cwd, sourcePath, merged)
+      const keyed = {
+        ...merged,
+        entries: assignEntryKeys({
+          sourcePath,
+          entries: merged.entries,
+          glossary,
+        }),
+      }
+      const mapFile = await writeMapFile(cwd, sourcePath, keyed)
 
       scanMeta[sourcePath] = {
         hash,

@@ -1,4 +1,4 @@
-import type { ConvertConfig, GlossaryPresetSourceConfig, MigrateConfig, TranslatorOptions } from './types'
+import type { AdaptConfig, ConvertConfig, GlossaryPresetSourceConfig, MigrateConfig, TranslatorOptions } from './types'
 import path from 'node:path'
 import process from 'node:process'
 import { readJsonFile } from './fs-utils'
@@ -9,6 +9,13 @@ export type MigrateConfigInput = Omit<Partial<MigrateConfig>, 'convert' | 'trans
   translatorOptions?: Partial<TranslatorOptions>
   glossaryPresets?: Partial<GlossaryPresetSourceConfig>
   convert?: Partial<ConvertConfig>
+  adapt?: Partial<AdaptConfig> & {
+    callee?: Partial<AdaptConfig['callee']>
+    keyReference?: Partial<AdaptConfig['keyReference']>
+    import?: {
+      script?: Partial<AdaptConfig['import']['script']>
+    }
+  }
 }
 
 export function defaultGlossaryPresetIndex(): string {
@@ -48,6 +55,26 @@ const DEFAULT_CONVERT_CONFIG: ConvertConfig = {
   format: 'json',
   includeSourceLocale: true,
   translateMissing: false,
+  legacyTextKey: false,
+}
+
+const DEFAULT_ADAPT_CONFIG: AdaptConfig = {
+  callee: {
+    vue: '$t',
+    script: 't',
+    default: 't',
+  },
+  keyReference: {
+    mode: 'local',
+    separator: '.',
+  },
+  import: {
+    script: {
+      enabled: false,
+      source: 'vue-i18n',
+      specifier: 'useI18n',
+    },
+  },
 }
 
 export const DEFAULT_CONFIG: MigrateConfig = {
@@ -86,6 +113,7 @@ export const DEFAULT_CONFIG: MigrateConfig = {
     index: DEFAULT_GLOSSARY_PRESET_INDEX,
   },
   convert: DEFAULT_CONVERT_CONFIG,
+  adapt: DEFAULT_ADAPT_CONFIG,
   batchSize: 20,
 }
 
@@ -97,6 +125,24 @@ export function defineConfig(config: MigrateConfigInput): MigrateConfig {
     format: config.convert?.format ?? DEFAULT_CONVERT_CONFIG.format,
     includeSourceLocale: config.convert?.includeSourceLocale ?? DEFAULT_CONVERT_CONFIG.includeSourceLocale,
     translateMissing: config.convert?.translateMissing ?? DEFAULT_CONVERT_CONFIG.translateMissing,
+    legacyTextKey: config.convert?.legacyTextKey ?? DEFAULT_CONVERT_CONFIG.legacyTextKey,
+  }
+
+  const adapt: AdaptConfig = {
+    callee: {
+      ...DEFAULT_ADAPT_CONFIG.callee,
+      ...config.adapt?.callee,
+    },
+    keyReference: {
+      ...DEFAULT_ADAPT_CONFIG.keyReference,
+      ...config.adapt?.keyReference,
+    },
+    import: {
+      script: {
+        ...DEFAULT_ADAPT_CONFIG.import.script,
+        ...config.adapt?.import?.script,
+      },
+    },
   }
 
   return {
@@ -111,6 +157,7 @@ export function defineConfig(config: MigrateConfigInput): MigrateConfig {
       index: config.glossaryPresets?.index ?? DEFAULT_GLOSSARY_PRESET_INDEX,
     },
     convert,
+    adapt,
   }
 }
 

@@ -4,7 +4,7 @@ const promptAnswers: unknown[] = []
 
 vi.mock('@clack/prompts', () => ({
   cancel: vi.fn(),
-  confirm: vi.fn(),
+  confirm: vi.fn(async () => promptAnswers.shift()),
   isCancel: () => false,
   multiselect: vi.fn(async () => promptAnswers.shift()),
   select: vi.fn(async () => promptAnswers.shift()),

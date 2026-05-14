@@ -2,6 +2,7 @@ import type { ApproveOptions, ApproveResult, TranslationEntry } from './types'
 import path from 'node:path'
 import process from 'node:process'
 import { readJsonFile, writeJsonFile } from './fs-utils'
+import { keyCandidatesForText } from './keygen'
 import { findMapPaths } from './map-paths'
 import { createMapFile } from './mapping'
 import { mapPathToSourcePath } from './paths'
@@ -28,15 +29,17 @@ export async function approveTranslations(options: ApproveOptions = {}): Promise
     let alreadyApproved = 0
     let skipped = 0
 
-    for (const entry of Object.values(mapFile.entries)) {
-      if (!isApprovableEntry(entry, options)) {
+    for (const [sourceText, entry] of Object.entries(mapFile.entries)) {
+      if (!isApprovableEntry(sourceText, entry, options)) {
         skipped += 1
         continue
       }
-      if (entry.approved) {
+      if (isFullyApproved(entry)) {
         alreadyApproved += 1
         continue
       }
+      entry.translationApproved = true
+      entry.keyApproved = true
       entry.approved = true
       approved += 1
     }
@@ -68,12 +71,29 @@ export async function approveTranslations(options: ApproveOptions = {}): Promise
   return { files, dryRun: options.dryRun === true }
 }
 
-function isApprovableEntry(entry: TranslationEntry, options: ApproveOptions): boolean {
+function isApprovableEntry(sourceText: string, entry: TranslationEntry, options: ApproveOptions): boolean {
   if (!options.includeSkipped && entry.skip)
     return false
   if (!options.includeDeprecated && entry.deprecated)
     return false
   if (!options.allowEmpty && !entry.translation)
     return false
+  if (!entry.key && !ensureEntryKey(sourceText, entry))
+    return false
+  return true
+}
+
+function isFullyApproved(entry: TranslationEntry): boolean {
+  return entry.approved
+    && (entry.translationApproved ?? true)
+    && (entry.keyApproved ?? true)
+}
+
+function ensureEntryKey(sourceText: string, entry: TranslationEntry): boolean {
+  const candidate = entry.keyCandidates?.[0] ?? keyCandidatesForText({ sourceText, translation: entry.translation })[0]
+  if (!candidate)
+    return false
+  entry.key = candidate
+  entry.keySource = entry.keySource ?? 'generated'
   return true
 }

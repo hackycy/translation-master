@@ -1,6 +1,7 @@
 import type { MapFile, TextSegment, TranslationEntry } from './types'
 import path from 'node:path'
 import { readJsonFile, writeJsonFile } from './fs-utils'
+import { keyCandidatesForText } from './keygen'
 import { sourcePathToMapPath } from './paths'
 import { isFuzzyMatch, similarity } from './utils/fuzzy-match'
 
@@ -22,6 +23,11 @@ export function createEntry(
     translation,
     translationSource,
     approved: translationSource === 'glossary',
+    translationApproved: translationSource === 'glossary',
+    key: keyCandidatesForText({ sourceText: segment.text, translation })[0],
+    keySource: 'generated',
+    keyApproved: translationSource === 'glossary',
+    keyCandidates: keyCandidatesForText({ sourceText: segment.text, translation }),
     skip: false,
     location: {
       line: segment.line,
@@ -70,6 +76,23 @@ export function mergeMapEntries(
         : fuzzyTextChanged || machineTranslationChanged
           ? false
           : (baseEntry?.approved ?? false),
+      translationApproved: nextEntry?.translationSource === 'glossary'
+        ? true
+        : fuzzyTextChanged || machineTranslationChanged
+          ? false
+          : (baseEntry?.translationApproved ?? baseEntry?.approved ?? false),
+      key: fuzzyTextChanged && previousEntry?.keySource !== 'manual'
+        ? nextEntry?.key
+        : baseEntry?.key ?? nextEntry?.key,
+      keySource: fuzzyTextChanged && previousEntry?.keySource !== 'manual'
+        ? nextEntry?.keySource
+        : baseEntry?.keySource ?? nextEntry?.keySource,
+      keyApproved: nextEntry?.translationSource === 'glossary'
+        ? true
+        : fuzzyTextChanged && previousEntry?.keySource !== 'manual'
+          ? false
+          : (baseEntry?.keyApproved ?? baseEntry?.approved ?? false),
+      keyCandidates: nextEntry?.keyCandidates ?? baseEntry?.keyCandidates,
       location: {
         line: segment.line,
         column: segment.column,

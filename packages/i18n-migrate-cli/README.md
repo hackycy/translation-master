@@ -1,8 +1,8 @@
 # @translation-master/i18n-migrate-cli
 
-源码级 i18n 迁移 CLI。扫描前端项目源码，提取指定源语言文本，生成可人工校对的映射文件，再把已确认的译文安全回写到源文件。
+源码级 i18n 迁移 CLI。扫描前端项目源码，提取指定源语言文本，生成可人工校对的映射文件，再把已确认的条目转换为 locale 资源或改写为项目约定的 i18n 调用。
 
-适合需要快速把现有项目迁移到另一种界面语言，但暂时不想大规模改造为 `t()` / locale 文件的场景。
+适合把已有中文/英文界面迁移成稳定的 `t(key)` / locale 文件结构；也保留 `apply` 直接翻译回写作为 legacy 兼容模式。
 
 ## 安装
 
@@ -28,20 +28,20 @@ pnpm exec tmigrate glossary init --preset all
 # 2. 扫描源码并生成 .tmigrate/maps 分片映射
 pnpm exec tmigrate scan src --to en
 
-# 3. 校对 .tmigrate/maps 下的翻译条目，再批量标记为 approved: true
+# 3. 校对 .tmigrate/maps 下的 translation 和 key，再批量标记为 approved: true
 pnpm exec tmigrate approve
 
 # 3.5. 先统计当前进度，看看还差什么
 pnpm exec tmigrate stats
 
-# 4. 可选：把 scan map 转换为传统 locale 语言包
+# 4. 把 scan map 转换为按文件路径分 namespace 的 locale 语言包
 pnpm exec tmigrate convert src --format ts --namespace app
 
-# 5. 预览回写 diff
-pnpm exec tmigrate apply --dry-run
+# 5. 预览源码改写为 $t(...) / t(...) 的 diff
+pnpm exec tmigrate adapt src --dry-run
 
-# 6. 写回源文件
-pnpm exec tmigrate apply
+# 6. 写回 i18n 调用
+pnpm exec tmigrate adapt src
 
 # 7. 如需回滚，从自动备份恢复
 pnpm exec tmigrate restore
@@ -52,11 +52,12 @@ pnpm exec tmigrate restore
 `tmigrate` 采用两阶段流程，避免机器翻译结果直接污染源文件：
 
 1. `scan` 扫描源码，提取源语言文本，结合术语表和翻译器生成 `.tmigrate/maps/**/*.json`。
-2. 开发者校对映射文件，修改 `translation`，并通过 `approve` 将确认过的条目标记为 `approved: true`。
-3. `apply` 只回写 `approved: true` 且未标记 `skip` 的条目。
-4. `apply` 写入前会备份原文件到 `.tmigrate/backups/`，可用 `restore` 回滚。
+2. 开发者校对映射文件，修改 `translation`、`key`，并通过 `approve` 确认翻译和 key。
+3. `convert` 使用持久化 key 生成平铺 locale 文件，namespace 由源文件路径承担。
+4. `adapt` 只把源码改写成 `$t(key)` / `t(key)` 调用，不生成翻译和语言包。
+5. `apply` 保留为 legacy 模式，用于把源文案直接替换成目标语言译文。
 
-也可以在校对后执行 `convert`，把 `.tmigrate/maps` 转成传统 `locales/langs/<locale>/...` 语言包。`convert` 不修改源码，只生成 locale 文件。
+`convert` 不修改源码，只生成 locale 文件；`adapt` 不生成语言包，只修改源码。两者都只消费已批准且未跳过、未废弃的 map 条目。
 
 ### 翻译器后端
 
@@ -184,6 +185,7 @@ tmigrate convert src --output-dir packages/app/locales/langs --namespace admin
 tmigrate convert src --target-only
 tmigrate convert src --translate-missing
 tmigrate convert src --no-translate-missing
+tmigrate convert src --legacy-text-key
 tmigrate convert src --dry-run
 ```
 
@@ -194,12 +196,12 @@ locales/langs/zh/admin/components/Table.ts
 locales/langs/en/admin/components/Table.ts
 ```
 
-生成内容是平铺字典。源语言包使用原文作为值，目标语言包使用 map 中的译文：
+生成内容是平铺字典。字段名默认使用 map 中持久化的英文语义 key，源语言包使用原文作为值，目标语言包使用 map 中的译文：
 
 ```ts
 export default {
-  "提交": "Submit",
-  "请输入用户名": "Please enter your username"
+  "submit": "提交",
+  "enterUsername": "请输入用户名"
 }
 ```
 
@@ -216,9 +218,37 @@ export default {
 | `--target-only` | 只生成目标语言包 |
 | `--translate-missing` | 对已批准但译文为空的条目复用 scan 的翻译配置补译 |
 | `--no-translate-missing` | 即使配置中开启了补译，本次转换也跳过空译文补译 |
+| `--legacy-text-key` | 兼容旧模式，继续使用原文作为 locale key |
 | `--dry-run` | 只预览将生成的文件，不写入 |
 
-默认只转换 `approved: true`、未标记 `skip`、未标记 `deprecated` 的条目。如果多个 map 最终落到同一个 locale 文件，后处理的条目会覆盖同名 key。
+默认只转换 `approved: true`、未标记 `skip`、未标记 `deprecated`，且已确认 key 的条目。如果多个 map 最终落到同一个 locale 文件，后处理的条目会覆盖同名 key。
+
+### `adapt`
+
+把已批准的 map 条目改写成项目 i18n 调用。`adapt` 只改源码，不生成语言包：
+
+```bash
+tmigrate adapt src
+tmigrate adapt src --dry-run
+tmigrate adapt src/components
+tmigrate adapt src --strategy ast
+```
+
+默认改写形式：
+
+- Vue 模板文本：`提交` -> `{{ $t('submit') }}`
+- Vue 静态属性：`tab="消费记录"` -> `:tab="$t('consumptionRecords')"`
+- TS/JS 字符串：`'账号安全'` -> `t('accountSecurity')`
+
+带插值的 Vue 模板文本会转换成具名参数调用，例如 `最大上传{{ fileMax }}张图片` -> `{{ $t('maxUploadImages', { fileMax }) }}`。
+
+常用选项：
+
+| 选项 | 说明 |
+|---|---|
+| `[path]` | 只改写指定源文件或目录对应的 map |
+| `--dry-run` | 只打印 diff，不写入源码 |
+| `--strategy <strategy>` | 改写策略：`ast`、`range`，当前默认使用安全范围改写 |
 
 #### 回写转义策略
 
@@ -347,7 +377,26 @@ tmigrate restore
     "format": "json",
     "namespace": "app",
     "includeSourceLocale": true,
-    "translateMissing": false
+    "translateMissing": false,
+    "legacyTextKey": false
+  },
+  "adapt": {
+    "callee": {
+      "vue": "$t",
+      "script": "t",
+      "default": "t"
+    },
+    "keyReference": {
+      "mode": "local",
+      "separator": "."
+    },
+    "import": {
+      "script": {
+        "enabled": false,
+        "source": "vue-i18n",
+        "specifier": "useI18n"
+      }
+    }
   },
   "translatorOptions": {
     "modelBaseUrl": "https://cdn.example.com/models",
@@ -432,22 +481,32 @@ src/views/Login.vue
   "version": 2,
   "generatedAt": "2026-05-10T08:00:00Z",
   "entries": {
-    "请输入用户名": {
-      "id": "a1b2c3d4",
-      "translation": "Please enter your username",
-      "translationSource": "machine",
-      "approved": false,
-      "skip": false,
-      "location": { "line": 12, "column": 8, "context": "template" }
-    },
-    "提交": {
-      "id": "e5f6g7h8",
-      "translation": "Submit",
-      "translationSource": "glossary",
-      "approved": true,
-      "skip": false,
-      "location": { "line": 28, "column": 12, "context": "template" }
-    }
+	    "请输入用户名": {
+	      "id": "a1b2c3d4",
+	      "translation": "Please enter your username",
+	      "translationSource": "machine",
+	      "approved": false,
+	      "translationApproved": false,
+	      "key": "enterUsername",
+	      "keySource": "generated",
+	      "keyApproved": false,
+	      "keyCandidates": ["enterUsername"],
+	      "skip": false,
+	      "location": { "line": 12, "column": 8, "context": "template" }
+	    },
+	    "提交": {
+	      "id": "e5f6g7h8",
+	      "translation": "Submit",
+	      "translationSource": "glossary",
+	      "approved": true,
+	      "translationApproved": true,
+	      "key": "submit",
+	      "keySource": "generated",
+	      "keyApproved": true,
+	      "keyCandidates": ["submit"],
+	      "skip": false,
+	      "location": { "line": 28, "column": 12, "context": "template" }
+	    }
   }
 }
 ```
@@ -465,7 +524,7 @@ src/views/Login.vue
 | `.md` | 段落文本，跳过代码块 |
 | `.yaml` / `.yml` | string value |
 
-Vue `{{ expression }}` 和 JavaScript `${expression}` 会在翻译前被占位符保护，回写时再还原。
+Vue `{{ expression }}` 和 JavaScript `${expression}` 会在翻译前被占位符保护。`convert` 会把它们输出为 `{param}` 形式的 locale 消息，`adapt` 会生成对应的参数对象。
 
 ## 翻译器
 
@@ -515,11 +574,13 @@ API 请求体格式：
 除 CLI 外，也可以在 Node.js 中直接调用迁移能力：
 
 ```ts
-import {
-  applyTranslations,
-  initGlossary,
-  initProject,
-  scanProject,
+	import {
+	  adaptSources,
+	  applyTranslations,
+	  convertMaps,
+	  initGlossary,
+	  initProject,
+	  scanProject,
 } from '@translation-master/i18n-migrate-cli'
 
 await initProject({ cwd: process.cwd(), from: 'zh', to: 'en', overwrite: false })
@@ -530,7 +591,8 @@ await scanProject({
   path: 'src',
 })
 
-await applyTranslations({ cwd: process.cwd(), dryRun: true })
+await convertMaps({ cwd: process.cwd(), path: 'src', format: 'json' })
+await adaptSources({ cwd: process.cwd(), path: 'src', dryRun: true })
 ```
 
 常用导出：
@@ -541,7 +603,8 @@ await applyTranslations({ cwd: process.cwd(), dryRun: true })
 | `initGlossary()` | 合并内置词库到 `.tmigrate/glossary.json` |
 | `scanProject()` | 扫描源码并生成 map |
 | `convertMaps()` | 把 map 转换为 locale 语言包 |
-| `applyTranslations()` | 回写已确认译文 |
+| `adaptSources()` | 把已确认源码文案改写为 i18n 调用 |
+| `applyTranslations()` | legacy：直接回写已确认译文 |
 | `restoreBackups()` | 从备份恢复 |
 | `defineConfig()` / `loadConfig()` | 生成或读取配置 |
 | `Extractor` / `Replacer` | 文本提取和源码回写 |

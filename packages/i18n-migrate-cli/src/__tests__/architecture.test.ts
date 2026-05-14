@@ -10,8 +10,11 @@ import {
   Extractor,
   generateId,
   isFuzzyMatch,
+  keyCandidatesForText,
   mapPathToSourcePath,
   mergeMapEntries,
+  messageWithNamedParams,
+  paramNameForExpression,
   protectPlaceholders,
   restorePlaceholders,
   shouldTranslate,
@@ -212,6 +215,19 @@ describe('i18n migrate architecture primitives', () => {
     expect(merged.entries['提交']?.approved).toBe(true)
     expect(merged.entries['提交']?.translationSource).toBe('glossary')
     expect(merged.entries['删除']?.deprecated).toBe(true)
+  })
+
+  it('generates stable semantic i18n key candidates', () => {
+    expect(keyCandidatesForText({ sourceText: '提交', translation: 'Submit' })).toContain('submit')
+    expect(keyCandidatesForText({ sourceText: '请输入用户名', translation: 'Please enter your username' })[0]).toBe('enterUsername')
+    expect(keyCandidatesForText({ sourceText: '共 {{ total }} 条记录', translation: 'Total {{ total }} records' })[0]).toBe('totalRecords')
+  })
+
+  it('turns interpolation expressions into stable named message params', () => {
+    expect(paramNameForExpression('total')).toBe('total')
+    expect(paramNameForExpression('user.name')).toBe('userName')
+    expect(paramNameForExpression('stats[\'total-count\']')).toBe('statsTotalCount')
+    expect(messageWithNamedParams('{{ user.name }} 有 {{ stats.total }} 条记录')).toBe('{userName} 有 {statsTotal} 条记录')
   })
 
   it('normalizes API translator endpoint responses', async () => {

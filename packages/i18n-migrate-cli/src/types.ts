@@ -1,6 +1,9 @@
 export type TranslationSource
   = 'machine' | 'glossary' | 'manual'
 
+export type TranslationKeySource
+  = 'generated' | 'manual'
+
 export type TextContext
   = | 'template'
     | 'script'
@@ -41,6 +44,11 @@ export interface TranslationEntry {
   translation: string
   translationSource: TranslationSource
   approved: boolean
+  translationApproved?: boolean
+  key?: string
+  keySource?: TranslationKeySource
+  keyApproved?: boolean
+  keyCandidates?: string[]
   skip: boolean
   location?: Location
   deprecated?: boolean
@@ -109,6 +117,32 @@ export interface ConvertConfig {
   targetLocale?: string
   includeSourceLocale: boolean
   translateMissing: boolean
+  legacyTextKey: boolean
+}
+
+export interface AdaptCalleeConfig {
+  vue: string
+  script: string
+  default: string
+}
+
+export interface AdaptKeyReferenceConfig {
+  mode: 'local' | 'full'
+  separator: string
+}
+
+export interface AdaptImportConfig {
+  script: {
+    enabled: boolean
+    source: string
+    specifier: string
+  }
+}
+
+export interface AdaptConfig {
+  callee: AdaptCalleeConfig
+  keyReference: AdaptKeyReferenceConfig
+  import: AdaptImportConfig
 }
 
 export interface MigrateConfig {
@@ -121,6 +155,7 @@ export interface MigrateConfig {
   translatorOptions: TranslatorOptions
   glossaryPresets?: GlossaryPresetSourceConfig
   convert?: ConvertConfig
+  adapt: AdaptConfig
   batchSize: number
 }
 
@@ -198,6 +233,32 @@ export interface ApplyResult {
   dryRun: boolean
 }
 
+export interface AdaptOptions {
+  cwd?: string
+  path?: string
+  dryRun?: boolean
+  strategy?: 'ast' | 'range'
+  onProgress?: (event: WorkflowProgressEvent) => void
+}
+
+export interface AdaptSkip {
+  sourcePath: string
+  text: string
+  key?: string
+  reason: string
+  suggestion: string
+}
+
+export interface AdaptFileChange extends FileChange {
+  skipped: AdaptSkip[]
+}
+
+export interface AdaptResult {
+  files: AdaptFileChange[]
+  dryRun: boolean
+  skipped: AdaptSkip[]
+}
+
 export interface ApproveOptions {
   cwd?: string
   path?: string
@@ -245,6 +306,7 @@ export interface ConvertOptions {
   targetLocale?: string
   includeSourceLocale?: boolean
   translateMissing?: boolean
+  legacyTextKey?: boolean
   dryRun?: boolean
   translator?: Translator
   onProgress?: (event: WorkflowProgressEvent) => void
@@ -307,6 +369,6 @@ export interface MapStatsReport {
 export type WorkflowProgressEvent
   = | { phase: 'prepare', message: string }
     | { phase: 'discover', message: string, total?: number }
-    | { phase: 'file', path: string, current: number, total: number, action: 'approve' | 'apply' | 'restore' | 'convert', dryRun?: boolean }
-    | { phase: 'write', path: string, current: number, total: number, action: 'approve' | 'apply' | 'restore' | 'convert' }
+    | { phase: 'file', path: string, current: number, total: number, action: 'approve' | 'apply' | 'adapt' | 'restore' | 'convert', dryRun?: boolean }
+    | { phase: 'write', path: string, current: number, total: number, action: 'approve' | 'apply' | 'adapt' | 'restore' | 'convert' }
     | { phase: 'done', message: string }

@@ -14,13 +14,14 @@ import process from 'node:process'
 import { loadConfig } from './config'
 import { isNodeError, readJsonFile } from './fs-utils'
 import { loadGlossary } from './glossary'
+import { messageWithNamedParams } from './keygen'
 import { findMapPaths } from './map-paths'
 import { createMapFile } from './mapping'
 import { mapPathToSourcePath, toPosixPath } from './paths'
 import { createTranslator } from './translator'
 import { translateTexts } from './translator/pipeline'
 
-interface ConvertRuntimeOptions extends Required<Pick<ConvertOptions, 'format' | 'includeSourceLocale' | 'outputDir' | 'targetLocale' | 'translateMissing'>> {
+interface ConvertRuntimeOptions extends Required<Pick<ConvertOptions, 'format' | 'includeSourceLocale' | 'legacyTextKey' | 'outputDir' | 'targetLocale' | 'translateMissing'>> {
   namespace?: string
   sourceLocale: string
 }
@@ -76,22 +77,22 @@ export async function convertMaps(options: ConvertOptions = {}): Promise<Convert
       })
 
       const mapFile = await readJsonFile<MapFile>(path.join(cwd, mapPath), createMapFile())
-      const entries = activeEntries(mapFile)
+      const entries = activeEntries(mapFile, runtime)
       const translatedEntries = runtime.translateMissing
         ? await fillMissingTranslations(entries, sourcePath, translationConfig, glossary, translator, options)
         : entries
 
       if (runtime.includeSourceLocale) {
         const output = ensureOutput(outputs, runtime, sourcePath, runtime.sourceLocale)
-        for (const [sourceText] of translatedEntries)
-          output.entries[sourceText] = sourceText
+        for (const [sourceText, entry] of translatedEntries)
+          output.entries[entryLocaleKey(sourceText, entry, runtime)] = messageWithNamedParams(sourceText)
         output.sourceMaps.add(mapPath)
       }
 
       const targetOutput = ensureOutput(outputs, runtime, sourcePath, runtime.targetLocale)
       for (const [sourceText, entry] of translatedEntries) {
         if (entry.translation)
-          targetOutput.entries[sourceText] = entry.translation
+          targetOutput.entries[entryLocaleKey(sourceText, entry, runtime)] = messageWithNamedParams(entry.translation)
       }
       targetOutput.sourceMaps.add(mapPath)
     }
@@ -155,12 +156,33 @@ function resolveConvertOptions(
     targetLocale: options.targetLocale ?? convertConfig?.targetLocale ?? configTargetLocale,
     includeSourceLocale: options.includeSourceLocale ?? convertConfig?.includeSourceLocale ?? true,
     translateMissing: options.translateMissing ?? convertConfig?.translateMissing ?? false,
+    legacyTextKey: options.legacyTextKey ?? convertConfig?.legacyTextKey ?? false,
   }
 }
 
-function activeEntries(mapFile: MapFile): Array<[string, TranslationEntry]> {
+function activeEntries(mapFile: MapFile, runtime: ConvertRuntimeOptions): Array<[string, TranslationEntry]> {
   return Object.entries(mapFile.entries)
-    .filter(([, entry]) => entry.approved && !entry.skip && !entry.deprecated)
+    .filter(([, entry]) => isReadyEntry(entry, runtime))
+}
+
+function isReadyEntry(entry: TranslationEntry, runtime: ConvertRuntimeOptions): boolean {
+  if (entry.skip || entry.deprecated)
+    return false
+  if (!entry.approved || !(entry.translationApproved ?? true) || !(entry.keyApproved ?? true))
+    return false
+  if (!entry.translation && !runtime.translateMissing)
+    return false
+  if (!runtime.legacyTextKey && !entry.key)
+    return false
+  return true
+}
+
+function entryLocaleKey(sourceText: string, entry: TranslationEntry, options: ConvertRuntimeOptions): string {
+  if (options.legacyTextKey)
+    return sourceText
+  if (!entry?.key)
+    throw new Error(`Approved entry "${sourceText}" is missing an i18n key.`)
+  return entry.key
 }
 
 async function fillMissingTranslations(

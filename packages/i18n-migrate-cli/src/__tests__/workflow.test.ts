@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { applyTranslations, approveTranslations, convertMaps, initGlossary, initProject, restoreBackups, scanProject } from '../index'
+import { adaptSources, applyTranslations, approveTranslations, convertMaps, initGlossary, initProject, restoreBackups, scanProject } from '../index'
 import { collectMapStats, formatMapStatsReport } from '../stats'
 
 const tempDirs: string[] = []
@@ -171,6 +171,37 @@ describe('i18n migrate workflow', () => {
     expect(overriddenAppMap.entries['旧文案']?.approved).toBe(true)
   })
 
+  it('re-approves legacy approved entries that still need translation or key approval', async () => {
+    const cwd = await createTempProject()
+    const sourcePath = path.join(cwd, 'src', 'App.vue')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, '<template><p>请输入用户名</p></template>\n', 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+
+    const mapPath = path.join(cwd, '.tmigrate', 'maps', 'src', 'App.vue.json')
+    const map = JSON.parse(await readFile(mapPath, 'utf8')) as {
+      entries: Record<string, { approved: boolean, translationApproved?: boolean, keyApproved?: boolean }>
+    }
+    map.entries['请输入用户名']!.approved = true
+    map.entries['请输入用户名']!.translationApproved = false
+    map.entries['请输入用户名']!.keyApproved = false
+    await writeFile(mapPath, JSON.stringify(map, null, 2), 'utf8')
+
+    const approved = await approveTranslations({ cwd })
+    expect(approved.files).toMatchObject([
+      { sourcePath: 'src/App.vue', approved: 1, alreadyApproved: 0, changed: true },
+    ])
+
+    const nextMap = JSON.parse(await readFile(mapPath, 'utf8')) as typeof map
+    expect(nextMap.entries['请输入用户名']).toMatchObject({
+      approved: true,
+      translationApproved: true,
+      keyApproved: true,
+    })
+  })
+
   it('converts approved maps into source and target locale packages', async () => {
     const cwd = await createTempProject()
     const sourcePath = path.join(cwd, 'src', 'components', 'Table.vue')
@@ -197,8 +228,8 @@ describe('i18n migrate workflow', () => {
     const target = await readFile(path.join(cwd, 'locales', 'langs', 'en-US', 'admin', 'components', 'Table.ts'), 'utf8')
     const source = await readFile(path.join(cwd, 'locales', 'langs', 'zh-CN', 'admin', 'components', 'Table.ts'), 'utf8')
 
-    expect(target).toBe(`export default {\n  "提交": "EN:提交",\n  "请输入用户名": "EN:请输入用户名"\n}\n`)
-    expect(source).toBe(`export default {\n  "提交": "提交",\n  "请输入用户名": "请输入用户名"\n}\n`)
+    expect(target).toBe(`export default {\n  "enterUsername": "EN:请输入用户名",\n  "submit": "EN:提交"\n}\n`)
+    expect(source).toBe(`export default {\n  "enterUsername": "请输入用户名",\n  "submit": "提交"\n}\n`)
   })
 
   it('supports target-only json conversion and translates approved empty entries on demand', async () => {
@@ -212,9 +243,11 @@ describe('i18n migrate workflow', () => {
 
     const mapPath = path.join(cwd, '.tmigrate', 'maps', 'src', 'views', 'Profile.vue.json')
     const map = JSON.parse(await readFile(mapPath, 'utf8')) as {
-      entries: Record<string, { approved: boolean, translation: string }>
+      entries: Record<string, { approved: boolean, translationApproved?: boolean, keyApproved?: boolean, translation: string }>
     }
     map.entries['保存设置']!.approved = true
+    map.entries['保存设置']!.translationApproved = true
+    map.entries['保存设置']!.keyApproved = true
     map.entries['保存设置']!.translation = ''
     await writeFile(mapPath, JSON.stringify(map, null, 2), 'utf8')
 
@@ -230,7 +263,7 @@ describe('i18n migrate workflow', () => {
       { locale: 'en', outputPath: 'locales/langs/en/views/Profile.json', entries: 1, changed: true },
     ])
     expect(await readFile(path.join(cwd, 'locales', 'langs', 'en', 'views', 'Profile.json'), 'utf8'))
-      .toBe(`{\n  "保存设置": "EN:保存设置"\n}\n`)
+      .toBe(`{\n  "saveSettings": "EN:保存设置"\n}\n`)
   })
 
   it('uses convert locale overrides when translating missing entries', async () => {
@@ -244,9 +277,11 @@ describe('i18n migrate workflow', () => {
 
     const mapPath = path.join(cwd, '.tmigrate', 'maps', 'src', 'views', 'Reports.vue.json')
     const map = JSON.parse(await readFile(mapPath, 'utf8')) as {
-      entries: Record<string, { approved: boolean, translation: string }>
+      entries: Record<string, { approved: boolean, translationApproved?: boolean, keyApproved?: boolean, translation: string }>
     }
     map.entries['导出报表']!.approved = true
+    map.entries['导出报表']!.translationApproved = true
+    map.entries['导出报表']!.keyApproved = true
     map.entries['导出报表']!.translation = ''
     await writeFile(mapPath, JSON.stringify(map, null, 2), 'utf8')
 
@@ -262,7 +297,7 @@ describe('i18n migrate workflow', () => {
 
     expect(translator.seen).toEqual([{ sourceLocale: 'zh-CN', targetLocale: 'en-US' }])
     expect(await readFile(path.join(cwd, 'locales', 'langs', 'en-US', 'views', 'Reports.json'), 'utf8'))
-      .toBe(`{\n  "导出报表": "zh-CN->en-US:导出报表"\n}\n`)
+      .toBe(`{\n  "exportReports": "zh-CN->en-US:导出报表"\n}\n`)
   })
 
   it('allows convert options to disable configured missing translation', async () => {
@@ -298,6 +333,100 @@ describe('i18n migrate workflow', () => {
     expect(translator.seen).toEqual([])
     expect(await readFile(path.join(cwd, 'locales', 'langs', 'en', 'views', 'Alerts.json'), 'utf8'))
       .toBe(`{}\n`)
+  })
+
+  it('keeps legacy source-text locale keys behind an explicit convert option', async () => {
+    const cwd = await createTempProject()
+    const sourcePath = path.join(cwd, 'src', 'views', 'Legacy.vue')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, '<template><button>保存设置</button></template>\n', 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+    await approveTranslations({ cwd })
+
+    await convertMaps({ cwd, includeSourceLocale: false, legacyTextKey: true })
+
+    expect(await readFile(path.join(cwd, 'locales', 'langs', 'en', 'views', 'Legacy.json'), 'utf8'))
+      .toBe(`{\n  "保存设置": "EN:保存设置"\n}\n`)
+  })
+
+  it('adapts approved Vue and script source text to i18n key calls', async () => {
+    const cwd = await createTempProject()
+    const sourcePath = path.join(cwd, 'src', 'components', 'Table.vue')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, [
+      '<template>',
+      '  <button>提交</button>',
+      '  <ATabPane tab="消费记录" />',
+      '  <p>最大上传{{ fileMax }}张图片</p>',
+      '  <p>{{ user.name }} 有 {{ stats.total }} 条记录</p>',
+      '</template>',
+      '<script setup lang="ts">',
+      'const title = \'账号安全\'',
+      '</script>',
+      '',
+    ].join('\n'), 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+
+    const mapPath = path.join(cwd, '.tmigrate', 'maps', 'src', 'components', 'Table.vue.json')
+    const map = JSON.parse(await readFile(mapPath, 'utf8')) as {
+      entries: Record<string, { approved: boolean, translationApproved?: boolean, keyApproved?: boolean, key?: string }>
+    }
+    map.entries['提交']!.key = 'submit'
+    map.entries['消费记录']!.key = 'consumptionRecords'
+    map.entries['最大上传{{ fileMax }}张图片']!.key = 'maxUploadImages'
+    map.entries['{{ user.name }} 有 {{ stats.total }} 条记录']!.key = 'userRecords'
+    map.entries['账号安全']!.key = 'accountSecurity'
+    for (const entry of Object.values(map.entries)) {
+      entry.approved = true
+      entry.translationApproved = true
+      entry.keyApproved = true
+    }
+    await writeFile(mapPath, JSON.stringify(map, null, 2), 'utf8')
+
+    const preview = await adaptSources({ cwd, path: 'src/components', dryRun: true })
+    expect(preview.files[0]?.diff).toContain('+  <button>{{ $t(\'submit\') }}</button>')
+    expect(preview.files[0]?.diff).toContain('+  <ATabPane :tab="$t(\'consumptionRecords\')" />')
+    expect(preview.files[0]?.diff).toContain('+  <p>{{ $t(\'maxUploadImages\', { fileMax }) }}</p>')
+    expect(preview.files[0]?.diff).toContain('+  <p>{{ $t(\'userRecords\', { userName: user.name, statsTotal: stats.total }) }}</p>')
+    expect(preview.files[0]?.diff).toContain('+const title = t(\'accountSecurity\')')
+
+    const adapted = await adaptSources({ cwd, path: 'src/components' })
+    expect(adapted.files).toMatchObject([{ changed: true, applied: 5 }])
+    expect(await readFile(sourcePath, 'utf8')).toBe([
+      '<template>',
+      '  <button>{{ $t(\'submit\') }}</button>',
+      '  <ATabPane :tab="$t(\'consumptionRecords\')" />',
+      '  <p>{{ $t(\'maxUploadImages\', { fileMax }) }}</p>',
+      '  <p>{{ $t(\'userRecords\', { userName: user.name, statsTotal: stats.total }) }}</p>',
+      '</template>',
+      '<script setup lang="ts">',
+      'const title = t(\'accountSecurity\')',
+      '</script>',
+      '',
+    ].join('\n'))
+  })
+
+  it('supports full key references when adapting source code', async () => {
+    const cwd = await createTempProject()
+    const sourcePath = path.join(cwd, 'src', 'views', 'Login.vue')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, '<template><button>提交</button></template>\n', 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    const configPath = path.join(cwd, '.tmigrate', 'config.json')
+    const config = JSON.parse(await readFile(configPath, 'utf8')) as { adapt?: Record<string, unknown> }
+    config.adapt = { keyReference: { mode: 'full', separator: '.' } }
+    await writeFile(configPath, JSON.stringify(config, null, 2), 'utf8')
+
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+    await approveTranslations({ cwd })
+    await adaptSources({ cwd })
+
+    expect(await readFile(sourcePath, 'utf8')).toBe('<template><button>{{ $t(\'views.Login.submit\') }}</button></template>\n')
   })
 
   it('seeds glossary presets without clobbering existing manual terms by default', async () => {

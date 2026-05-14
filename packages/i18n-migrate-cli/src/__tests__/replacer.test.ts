@@ -1,9 +1,10 @@
 import type { TranslationEntry } from '../types'
 import { describe, expect, it } from 'vitest'
+import { defineConfig } from '../config'
 import { Extractor } from '../extractor'
 import { Replacer } from '../replacer'
 
-const config = {
+const config = defineConfig({
   sourceLocale: 'zh',
   targetLocale: 'en',
   include: [],
@@ -16,7 +17,7 @@ const config = {
     concurrency: 5,
   },
   batchSize: 20,
-}
+})
 
 const expression = `$${'{name}'}`
 const plainExpression = `$${'{value}'}`

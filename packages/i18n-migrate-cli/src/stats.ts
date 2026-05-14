@@ -216,7 +216,7 @@ function classifyEntry(entry: TranslationEntry, stats: MapStatsBucket): void {
 
   stats.translationSourceCounts[entry.translationSource] += 1
 
-  if (entry.approved)
+  if (entry.approved && (entry.translationApproved ?? true) && (entry.keyApproved ?? true) && entry.key)
     stats.readyToApplyEntries += 1
   else
     stats.pendingReviewEntries += 1

@@ -3,6 +3,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { Command } from 'commander'
 import pc from 'picocolors'
+import { adaptSources } from './adapt'
 import { applyTranslations, restoreBackups } from './apply'
 import { approveTranslations } from './approve'
 import { convertMaps } from './converter'
@@ -105,6 +106,7 @@ export function createCli(options: CreateCliOptions): Command {
     .option('--target-only', 'only generate target locale package')
     .option('--translate-missing', 'translate approved entries with empty translations before converting')
     .option('--no-translate-missing', 'do not translate approved entries with empty translations')
+    .option('--legacy-text-key', 'use source text as locale keys for legacy packages')
     .option('--dry-run', 'preview generated locale package files without writing')
     .action(async (targetPath: string | undefined, command: {
       outputDir?: string
@@ -114,6 +116,7 @@ export function createCli(options: CreateCliOptions): Command {
       to?: string
       targetOnly?: boolean
       translateMissing?: boolean
+      legacyTextKey?: boolean
       dryRun?: boolean
     }) => {
       const progress = createWorkflowProgressRenderer('convert')
@@ -126,6 +129,7 @@ export function createCli(options: CreateCliOptions): Command {
         targetLocale: command.to,
         includeSourceLocale: command.targetOnly ? false : undefined,
         translateMissing: command.translateMissing,
+        legacyTextKey: command.legacyTextKey,
         dryRun: command.dryRun,
         onProgress: progress.update,
       })
@@ -137,6 +141,30 @@ export function createCli(options: CreateCliOptions): Command {
         for (const file of result.files)
           console.log(pc.dim(`${file.outputPath}\t${file.entries} entries`))
       }
+    })
+
+  program
+    .command('adapt [path]')
+    .description('Rewrite approved source text into project i18n calls.')
+    .option('--dry-run', 'print a diff without writing files')
+    .option('--strategy <strategy>', 'rewrite strategy: ast, range')
+    .action(async (targetPath: string | undefined, command: { dryRun?: boolean, strategy?: string }) => {
+      const progress = createWorkflowProgressRenderer('adapt')
+      const result = await adaptSources({
+        path: targetPath,
+        dryRun: command.dryRun,
+        strategy: normalizeAdaptStrategy(command.strategy),
+        onProgress: progress.update,
+      })
+      progress.stop('Adapt finished.')
+      for (const file of result.files) {
+        if (file.diff)
+          console.log(file.diff)
+      }
+      const changed = result.files.filter(file => file.changed).length
+      console.log(pc.green(`${result.dryRun ? 'Previewed' : 'Adapted'} ${changed} changed file(s).`))
+      if (result.skipped.length > 0)
+        console.log(pc.yellow(`Skipped ${result.skipped.length} entr${result.skipped.length === 1 ? 'y' : 'ies'} that need manual handling.`))
     })
 
   program
@@ -231,6 +259,14 @@ function normalizeConvertFormat(value: string | undefined) {
   if (value === 'json' || value === 'js' || value === 'ts')
     return value
   throw new Error(`Unsupported locale package format "${value}". Expected json, js, or ts.`)
+}
+
+function normalizeAdaptStrategy(value: string | undefined): 'ast' | 'range' | undefined {
+  if (!value)
+    return undefined
+  if (value === 'ast' || value === 'range')
+    return value
+  throw new Error(`Unsupported adapt strategy "${value}". Expected ast or range.`)
 }
 
 function normalizeInitTranslator(value: string | undefined): 'local' | 'api' | 'chrome' | undefined {
@@ -332,7 +368,7 @@ function createScanProgressRenderer(): { update: (event: ScanProgressEvent) => v
   }
 }
 
-function createWorkflowProgressRenderer(_action: 'approve' | 'apply' | 'restore' | 'convert'): { update: (event: WorkflowProgressEvent) => void, stop: (message: string) => void } {
+function createWorkflowProgressRenderer(_action: 'approve' | 'apply' | 'adapt' | 'restore' | 'convert'): { update: (event: WorkflowProgressEvent) => void, stop: (message: string) => void } {
   const spinner = createSpinner()
   let started = false
   let finished = false
@@ -385,11 +421,13 @@ function createWorkflowProgressRenderer(_action: 'approve' | 'apply' | 'restore'
   }
 }
 
-function actionLabel(action: 'approve' | 'apply' | 'restore' | 'convert'): string {
+function actionLabel(action: 'approve' | 'apply' | 'adapt' | 'restore' | 'convert'): string {
   if (action === 'approve')
     return 'Approving'
   if (action === 'apply')
     return 'Applying'
+  if (action === 'adapt')
+    return 'Adapting'
   if (action === 'restore')
     return 'Restoring'
   return 'Converting'

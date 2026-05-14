@@ -1,3 +1,4 @@
+export { adaptContent, adaptSources } from './adapt'
 export { applyTranslations, restoreBackups } from './apply'
 export { approveTranslations } from './approve'
 export { backupFile, listBackupEntries, loadBackupMeta, saveBackupMeta } from './backup'
@@ -9,6 +10,7 @@ export { Extractor } from './extractor'
 export { composeGlossaryTranslation, enforceGlossaryTerms, initGlossary, loadGlossary, matchGlossary } from './glossary'
 export type { Glossary, GlossaryPresetName, InitGlossaryOptions, InitGlossaryResult } from './glossary'
 export { initProject } from './init'
+export { assignEntryKeys, keyCandidatesForText, keyHash, messageWithNamedParams, normalizeKey, paramNameForExpression } from './keygen'
 export { findMapPaths } from './map-paths'
 export { createEntry, createMapFile, mergeMapEntries, readMapFile, writeMapFile } from './mapping'
 export { CompositeParser, createDefaultParser } from './parsers/parser'
@@ -25,6 +27,10 @@ export { LocalTranslator } from './translator/local'
 export { OnnxTranslator } from './translator/onnx'
 export { translateTexts } from './translator/pipeline'
 export type {
+  AdaptFileChange,
+  AdaptOptions,
+  AdaptResult,
+  AdaptSkip,
   ApplyOptions,
   ApplyResult,
   ApproveFileChange,
