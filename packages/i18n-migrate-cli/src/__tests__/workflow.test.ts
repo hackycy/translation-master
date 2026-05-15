@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { adaptSources, applyTranslations, approveTranslations, convertMaps, initGlossary, initProject, restoreBackups, scanProject } from '../index'
+import { adaptSources, applyTranslations, approveTranslations, convertMaps, initGlossary, initProject, restoreBackups, scanProject, translateLocalePackage } from '../index'
 import { collectMapStats, formatMapStatsReport } from '../stats'
 
 const tempDirs: string[] = []
@@ -373,6 +373,86 @@ describe('i18n migrate workflow', () => {
 
     expect(await readFile(path.join(cwd, 'src', 'locales', 'langs', 'en', 'views', 'Legacy.json'), 'utf8'))
       .toBe(`{\n  "保存设置": "EN:保存设置"\n}\n`)
+  })
+
+  it('translates an existing locale package directory without tmigrate config', async () => {
+    const cwd = await createTempProject()
+    const sourceDir = path.join(cwd, 'src', 'locales', 'lang', 'zh')
+    await mkdir(path.join(sourceDir, 'views'), { recursive: true })
+    await writeFile(path.join(sourceDir, 'common.json'), JSON.stringify({
+      save: '保存',
+      nested: {
+        title: '账号安全',
+      },
+    }, null, 2), 'utf8')
+    await writeFile(path.join(sourceDir, 'views', 'profile.ts'), [
+      'export default {',
+      '  title: "个人资料",',
+      '  tabs: ["基础信息", "安全设置"],',
+      '  untouchedKey: "保存"',
+      '}',
+      '',
+    ].join('\n'), 'utf8')
+
+    const translator = new LocaleAwareTranslator()
+    const result = await translateLocalePackage({
+      cwd,
+      path: 'src/locales/lang/zh',
+      sourceLocale: 'zh',
+      targetLocale: 'en',
+      translator,
+    })
+
+    expect(result.outputDir).toBe('src/locales/lang/en')
+    expect(result.files).toEqual([
+      { sourcePath: 'src/locales/lang/zh/common.json', outputPath: 'src/locales/lang/en/common.json', changed: true, skipped: false, entries: 2 },
+      { sourcePath: 'src/locales/lang/zh/views/profile.ts', outputPath: 'src/locales/lang/en/views/profile.ts', changed: true, skipped: false, entries: 4 },
+    ])
+    expect(translator.seen).toEqual([
+      { sourceLocale: 'zh', targetLocale: 'en' },
+      { sourceLocale: 'zh', targetLocale: 'en' },
+    ])
+
+    const jsonOutput = await readFile(path.join(cwd, 'src', 'locales', 'lang', 'en', 'common.json'), 'utf8')
+    expect(jsonOutput).toContain('"save": "zh->en:保存"')
+    expect(jsonOutput).toContain('"title": "zh->en:账号安全"')
+    expect(jsonOutput).not.toContain('zh->en:nested')
+
+    const tsOutput = await readFile(path.join(cwd, 'src', 'locales', 'lang', 'en', 'views', 'profile.ts'), 'utf8')
+    expect(tsOutput).toContain('title: "zh->en:个人资料"')
+    expect(tsOutput).toContain('"zh->en:基础信息"')
+    expect(tsOutput).toContain('untouchedKey: "zh->en:保存"')
+  })
+
+  it('skips existing locale package outputs unless overwrite is explicit', async () => {
+    const cwd = await createTempProject()
+    const sourceDir = path.join(cwd, 'src', 'locales', 'zh')
+    const targetDir = path.join(cwd, 'src', 'locales', 'en')
+    await mkdir(sourceDir, { recursive: true })
+    await mkdir(targetDir, { recursive: true })
+    await writeFile(path.join(sourceDir, 'common.json'), JSON.stringify({ save: '保存' }, null, 2), 'utf8')
+    await writeFile(path.join(targetDir, 'common.json'), JSON.stringify({ save: 'Existing' }, null, 2), 'utf8')
+
+    const skipped = await translateLocalePackage({
+      cwd,
+      path: 'src/locales/zh',
+      sourceLocale: 'zh',
+      targetLocale: 'en',
+      translator: new EchoTranslator(),
+    })
+    expect(skipped.files[0]).toMatchObject({ changed: false, skipped: true })
+    expect(await readFile(path.join(targetDir, 'common.json'), 'utf8')).toContain('Existing')
+
+    const overwritten = await translateLocalePackage({
+      cwd,
+      path: 'src/locales/zh',
+      sourceLocale: 'zh',
+      targetLocale: 'en',
+      overwrite: true,
+      translator: new EchoTranslator(),
+    })
+    expect(overwritten.files[0]).toMatchObject({ changed: true, skipped: false })
+    expect(await readFile(path.join(targetDir, 'common.json'), 'utf8')).toContain('EN:保存')
   })
 
   it('adapts approved Vue and script source text to i18n key calls', async () => {

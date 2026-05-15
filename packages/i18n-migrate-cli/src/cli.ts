@@ -10,7 +10,8 @@ import { DEFAULT_CONVERT_OUTPUT_DIR } from './config'
 import { convertMaps } from './converter'
 import { initGlossary } from './glossary'
 import { initProject } from './init'
-import { createSpinner } from './prompts'
+import { translateLocalePackage } from './locale-translator'
+import { createSpinner, promptLocalePair } from './prompts'
 import { scanProject } from './scanner'
 import { collectMapStats, formatMapStatsReport } from './stats'
 
@@ -141,6 +142,70 @@ export function createCli(options: CreateCliOptions): Command {
       if (result.files.length > 0) {
         for (const file of result.files)
           console.log(pc.dim(`${file.outputPath}\t${file.entries} entries`))
+      }
+    })
+
+  program
+    .command('translate-locale <dir>')
+    .description('Translate an existing locale package directory into another locale without reading .tmigrate config.')
+    .option('-o, --output-dir <dir>', 'translated locale package output directory')
+    .option('--from <locale>', 'source locale')
+    .option('--to <locale>', 'target locale')
+    .option('--translator <backend>', 'translation backend: local, api, chrome')
+    .option('--model-base-url <url-or-path>', 'local model base URL or path')
+    .option('--endpoint <url>', 'API translator endpoint')
+    .option('--api-key <key>', 'API translator key')
+    .option('--chrome-browser-executable-path <path>', 'Google Chrome executable path for chrome translator')
+    .option('--no-chrome-browser-visible', 'hide Chrome window for chrome translator')
+    .option('--batch-size <number>', 'translation batch size')
+    .option('--overwrite', 'overwrite existing output files')
+    .option('--dry-run', 'preview translated locale package files without writing')
+    .action(async (targetDir: string, command: {
+      outputDir?: string
+      from?: string
+      to?: string
+      translator?: string
+      modelBaseUrl?: string
+      endpoint?: string
+      apiKey?: string
+      chromeBrowserExecutablePath?: string
+      chromeBrowserVisible?: boolean
+      batchSize?: string
+      overwrite?: boolean
+      dryRun?: boolean
+    }) => {
+      const locales = await resolveLocalePairForCommand(command.from, command.to)
+      const progress = createWorkflowProgressRenderer('translate-locale')
+      const result = await translateLocalePackage({
+        path: targetDir,
+        outputDir: command.outputDir,
+        sourceLocale: locales.sourceLocale,
+        targetLocale: locales.targetLocale,
+        translatorBackend: normalizeTranslatorBackend(command.translator),
+        translatorOptions: {
+          modelBaseUrl: command.modelBaseUrl,
+          endpoint: command.endpoint,
+          apiKey: command.apiKey,
+          chromeBrowserExecutablePath: command.chromeBrowserExecutablePath,
+          chromeBrowserVisible: command.chromeBrowserVisible,
+        },
+        batchSize: normalizePositiveInteger(command.batchSize, 'batch size'),
+        overwrite: command.overwrite,
+        dryRun: command.dryRun,
+        onProgress: progress.update,
+      })
+      progress.stop('Translate locale finished.')
+      const changed = result.files.filter(file => file.changed).length
+      const skipped = result.files.filter(file => file.skipped).length
+      const totalEntries = result.files.reduce((sum, file) => sum + file.entries, 0)
+      console.log(pc.green(`${result.dryRun ? 'Would write' : 'Translated'} ${changed} locale file(s), ${totalEntries} entr${totalEntries === 1 ? 'y' : 'ies'} (${result.sourceLocale}->${result.targetLocale}).`))
+      if (skipped > 0)
+        console.log(pc.yellow(`Skipped ${skipped} existing output file(s). Use --overwrite to replace them.`))
+      if (result.files.length > 0) {
+        for (const file of result.files) {
+          const state = file.skipped ? 'skipped' : file.changed ? 'changed' : 'unchanged'
+          console.log(pc.dim(`${file.outputPath}\t${file.entries} entries\t${state}`))
+        }
       }
     })
 
@@ -290,6 +355,39 @@ function normalizeInitTranslator(value: string | undefined): 'local' | 'api' | '
   throw new Error(`Unsupported translator "${value}". Expected local, api, or chrome.`)
 }
 
+function normalizeTranslatorBackend(value: string | undefined): 'local' | 'api' | 'chrome' | undefined {
+  return normalizeInitTranslator(value)
+}
+
+async function resolveLocalePairForCommand(sourceLocale: string | undefined, targetLocale: string | undefined): Promise<{ sourceLocale: string, targetLocale: string }> {
+  if (sourceLocale && targetLocale) {
+    if (sameLocale(sourceLocale, targetLocale))
+      throw new Error('Source locale and target locale must be different.')
+    return { sourceLocale, targetLocale }
+  }
+
+  if (!process.stdin.isTTY)
+    throw new Error('Missing locale option. Pass both --from <locale> and --to <locale>, or run in an interactive terminal to choose them.')
+
+  const pair = await promptLocalePair({ sourceLocale, targetLocale })
+  if (sameLocale(pair.sourceLocale, pair.targetLocale))
+    throw new Error('Source locale and target locale must be different.')
+  return pair
+}
+
+function sameLocale(left: string, right: string): boolean {
+  return left.toLowerCase().replace(/_/g, '-') === right.toLowerCase().replace(/_/g, '-')
+}
+
+function normalizePositiveInteger(value: string | undefined, label: string): number | undefined {
+  if (!value)
+    return undefined
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed <= 0)
+    throw new Error(`Invalid ${label} "${value}". Expected a positive integer.`)
+  return parsed
+}
+
 type ScanCommandOptions = Parameters<typeof scanProject>[0]
 
 async function scanProjectWithProgress(options: ScanCommandOptions, progress: { stop: (message: string) => void }) {
@@ -381,7 +479,7 @@ function createScanProgressRenderer(): { update: (event: ScanProgressEvent) => v
   }
 }
 
-function createWorkflowProgressRenderer(_action: 'approve' | 'apply' | 'adapt' | 'restore' | 'convert'): { update: (event: WorkflowProgressEvent) => void, stop: (message: string) => void } {
+function createWorkflowProgressRenderer(_action: 'approve' | 'apply' | 'adapt' | 'restore' | 'convert' | 'translate-locale'): { update: (event: WorkflowProgressEvent) => void, stop: (message: string) => void } {
   const spinner = createSpinner()
   let started = false
   let finished = false
@@ -434,7 +532,7 @@ function createWorkflowProgressRenderer(_action: 'approve' | 'apply' | 'adapt' |
   }
 }
 
-function actionLabel(action: 'approve' | 'apply' | 'adapt' | 'restore' | 'convert'): string {
+function actionLabel(action: 'approve' | 'apply' | 'adapt' | 'restore' | 'convert' | 'translate-locale'): string {
   if (action === 'approve')
     return 'Approving'
   if (action === 'apply')
@@ -443,6 +541,8 @@ function actionLabel(action: 'approve' | 'apply' | 'adapt' | 'restore' | 'conver
     return 'Adapting'
   if (action === 'restore')
     return 'Restoring'
+  if (action === 'translate-locale')
+    return 'Translating locale'
   return 'Converting'
 }
 

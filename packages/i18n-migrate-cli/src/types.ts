@@ -359,6 +359,40 @@ export interface ConvertResult {
   format: LocalePackageFormat
 }
 
+export type LocaleTranslateBackend = MigrateConfig['translator']
+
+export interface TranslateLocaleOptions {
+  cwd?: string
+  path: string
+  outputDir?: string
+  sourceLocale: string
+  targetLocale: string
+  translatorBackend?: LocaleTranslateBackend
+  translatorOptions?: Partial<TranslatorOptions>
+  batchSize?: number
+  dryRun?: boolean
+  overwrite?: boolean
+  translator?: Translator
+  onProgress?: (event: WorkflowProgressEvent) => void
+}
+
+export interface TranslateLocaleFileChange {
+  sourcePath: string
+  outputPath: string
+  changed: boolean
+  skipped: boolean
+  entries: number
+}
+
+export interface TranslateLocaleResult {
+  files: TranslateLocaleFileChange[]
+  dryRun: boolean
+  sourceDir: string
+  outputDir: string
+  sourceLocale: string
+  targetLocale: string
+}
+
 export interface MapStatsBucket {
   mapFiles: number
   adaptReadyMapFiles: number
@@ -407,6 +441,6 @@ export interface MapStatsReport {
 export type WorkflowProgressEvent
   = | { phase: 'prepare', message: string }
     | { phase: 'discover', message: string, total?: number }
-    | { phase: 'file', path: string, current: number, total: number, action: 'approve' | 'apply' | 'adapt' | 'restore' | 'convert', dryRun?: boolean }
-    | { phase: 'write', path: string, current: number, total: number, action: 'approve' | 'apply' | 'adapt' | 'restore' | 'convert' }
+    | { phase: 'file', path: string, current: number, total: number, action: 'approve' | 'apply' | 'adapt' | 'restore' | 'convert' | 'translate-locale', dryRun?: boolean }
+    | { phase: 'write', path: string, current: number, total: number, action: 'approve' | 'apply' | 'adapt' | 'restore' | 'convert' | 'translate-locale' }
     | { phase: 'done', message: string }

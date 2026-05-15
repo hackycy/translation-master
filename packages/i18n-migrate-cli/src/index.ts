@@ -11,6 +11,7 @@ export { composeGlossaryTranslation, enforceGlossaryTerms, initGlossary, loadGlo
 export type { Glossary, GlossaryPresetName, InitGlossaryOptions, InitGlossaryResult } from './glossary'
 export { initProject } from './init'
 export { assignEntryKeys, keyCandidatesForText, keyHash, messageWithNamedParams, normalizeKey, paramNameForExpression } from './keygen'
+export { translateLocalePackage } from './locale-translator'
 export { findMapPaths } from './map-paths'
 export { createEntry, createMapFile, mergeMapEntries, readMapFile, writeMapFile } from './mapping'
 export { CompositeParser, createDefaultParser } from './parsers/parser'
@@ -61,6 +62,9 @@ export type {
   ScanResult,
   TextContext,
   TextSegment,
+  TranslateLocaleFileChange,
+  TranslateLocaleOptions,
+  TranslateLocaleResult,
   TranslateOptions,
   TranslateResult,
   TranslationEntry,

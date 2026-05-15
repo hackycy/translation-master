@@ -122,6 +122,34 @@ export async function confirmOverwriteTmigrate(): Promise<boolean> {
   return answer
 }
 
+export async function promptLocalePair(defaults: { sourceLocale?: string, targetLocale?: string } = {}): Promise<{ sourceLocale: string, targetLocale: string }> {
+  const localeOptions = getInitLocaleOptions()
+
+  let sourceLocale = defaults.sourceLocale
+  if (!sourceLocale) {
+    const answer = await select({
+      message: 'Source locale',
+      initialValue: 'zh',
+      options: localeOptions,
+    })
+    assertPromptValue(answer)
+    sourceLocale = answer
+  }
+
+  let targetLocale = defaults.targetLocale
+  if (!targetLocale) {
+    const answer = await select({
+      message: 'Target locale',
+      initialValue: sourceLocale.startsWith('zh') ? 'en' : 'zh',
+      options: localeOptions,
+    })
+    assertPromptValue(answer)
+    targetLocale = answer
+  }
+
+  return { sourceLocale, targetLocale }
+}
+
 export function createSpinner() {
   return spinner()
 }

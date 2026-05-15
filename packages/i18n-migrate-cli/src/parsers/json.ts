@@ -19,7 +19,7 @@ export function extractJsonSegments(content: string, filePath: string) {
     return []
   }
   return extractQuotedStrings(content, filePath, 'json-value', 'JSONString')
-    .filter(segment => !isLikelyJsonKey(content, segment.end) && segment.text.trim())
+    .filter(segment => !isLikelyJsonKey(content, segment.end + 1) && segment.text.trim())
 }
 
 function isLikelyJsonKey(content: string, end: number): boolean {
