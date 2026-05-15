@@ -1,7 +1,7 @@
 {
   "name": "@translation-master/core",
   "type": "module",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "Runtime-agnostic translation core powered by Transformers.js",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",

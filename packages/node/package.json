@@ -1,7 +1,7 @@
 {
   "name": "@translation-master/node",
   "type": "module",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "Node.js translation library powered by Transformers.js with ONNX Runtime",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
