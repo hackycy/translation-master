@@ -147,51 +147,19 @@ export function createCli(options: CreateCliOptions): Command {
 
   program
     .command('translate-locale <dir>')
-    .description('Translate an existing locale package directory into another locale without reading .tmigrate config.')
-    .option('-o, --output-dir <dir>', 'translated locale package output directory')
+    .description('Translate an existing locale package directory using .tmigrate translator config.')
     .option('--from <locale>', 'source locale')
     .option('--to <locale>', 'target locale')
-    .option('--translator <backend>', 'translation backend: local, api, chrome')
-    .option('--model-base-url <url-or-path>', 'local model base URL or path')
-    .option('--endpoint <url>', 'API translator endpoint')
-    .option('--api-key <key>', 'API translator key')
-    .option('--chrome-browser-executable-path <path>', 'Google Chrome executable path for chrome translator')
-    .option('--no-chrome-browser-visible', 'hide Chrome window for chrome translator')
-    .option('--batch-size <number>', 'translation batch size')
-    .option('--overwrite', 'overwrite existing output files')
-    .option('--dry-run', 'preview translated locale package files without writing')
     .action(async (targetDir: string, command: {
-      outputDir?: string
       from?: string
       to?: string
-      translator?: string
-      modelBaseUrl?: string
-      endpoint?: string
-      apiKey?: string
-      chromeBrowserExecutablePath?: string
-      chromeBrowserVisible?: boolean
-      batchSize?: string
-      overwrite?: boolean
-      dryRun?: boolean
     }) => {
       const locales = await resolveLocalePairForCommand(command.from, command.to)
       const progress = createWorkflowProgressRenderer('translate-locale')
       const result = await translateLocalePackage({
         path: targetDir,
-        outputDir: command.outputDir,
         sourceLocale: locales.sourceLocale,
         targetLocale: locales.targetLocale,
-        translatorBackend: normalizeTranslatorBackend(command.translator),
-        translatorOptions: {
-          modelBaseUrl: command.modelBaseUrl,
-          endpoint: command.endpoint,
-          apiKey: command.apiKey,
-          chromeBrowserExecutablePath: command.chromeBrowserExecutablePath,
-          chromeBrowserVisible: command.chromeBrowserVisible,
-        },
-        batchSize: normalizePositiveInteger(command.batchSize, 'batch size'),
-        overwrite: command.overwrite,
-        dryRun: command.dryRun,
         onProgress: progress.update,
       })
       progress.stop('Translate locale finished.')
@@ -355,10 +323,6 @@ function normalizeInitTranslator(value: string | undefined): 'local' | 'api' | '
   throw new Error(`Unsupported translator "${value}". Expected local, api, or chrome.`)
 }
 
-function normalizeTranslatorBackend(value: string | undefined): 'local' | 'api' | 'chrome' | undefined {
-  return normalizeInitTranslator(value)
-}
-
 async function resolveLocalePairForCommand(sourceLocale: string | undefined, targetLocale: string | undefined): Promise<{ sourceLocale: string, targetLocale: string }> {
   if (sourceLocale && targetLocale) {
     if (sameLocale(sourceLocale, targetLocale))
@@ -377,15 +341,6 @@ async function resolveLocalePairForCommand(sourceLocale: string | undefined, tar
 
 function sameLocale(left: string, right: string): boolean {
   return left.toLowerCase().replace(/_/g, '-') === right.toLowerCase().replace(/_/g, '-')
-}
-
-function normalizePositiveInteger(value: string | undefined, label: string): number | undefined {
-  if (!value)
-    return undefined
-  const parsed = Number(value)
-  if (!Number.isInteger(parsed) || parsed <= 0)
-    throw new Error(`Invalid ${label} "${value}". Expected a positive integer.`)
-  return parsed
 }
 
 type ScanCommandOptions = Parameters<typeof scanProject>[0]

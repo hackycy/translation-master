@@ -11,6 +11,47 @@ import { promisify } from 'node:util'
 const execFileAsync = promisify(execFile)
 const MIN_CHROME_TRANSLATOR_MAJOR_VERSION = 138
 const GOOGLE_CHROME_DOWNLOAD_URL = 'https://www.google.com/chrome/'
+const CHROME_TRANSLATOR_LANGUAGES = new Set([
+  'ar',
+  'bg',
+  'bn',
+  'cs',
+  'da',
+  'de',
+  'el',
+  'en',
+  'es',
+  'fi',
+  'fr',
+  'hi',
+  'hr',
+  'hu',
+  'id',
+  'it',
+  'iw',
+  'ja',
+  'kn',
+  'ko',
+  'lt',
+  'mr',
+  'nl',
+  'no',
+  'pl',
+  'pt',
+  'ro',
+  'ru',
+  'sk',
+  'sl',
+  'sv',
+  'ta',
+  'te',
+  'th',
+  'tr',
+  'uk',
+  'vi',
+  'zh',
+  'zh-Hant',
+])
 
 export interface TranslateOptions {
   sourceLocale: string
@@ -69,11 +110,12 @@ export class ChromeTranslator implements Translator {
       throw new Error('Chrome translator page was not initialized.')
 
     const timeout = this.options.timeout ?? 30000
-    const needsActivation = await this.prepareTranslator(page, options.sourceLocale, options.targetLocale, timeout)
+    const languagePair = normalizeChromeTranslatorLanguagePair(options.sourceLocale, options.targetLocale)
+    const needsActivation = await this.prepareTranslator(page, languagePair.sourceLanguage, languagePair.targetLanguage, timeout)
     if (needsActivation) {
       await page.click('#activate')
     }
-    await this.waitForTranslatorReady(page, options.sourceLocale, options.targetLocale, timeout)
+    await this.waitForTranslatorReady(page, languagePair.sourceLanguage, languagePair.targetLanguage, timeout)
   }
 
   async translate(texts: string[], options: TranslateOptions): Promise<TranslateResult[]> {
@@ -86,13 +128,14 @@ export class ChromeTranslator implements Translator {
       let translations: string[]
       try {
         const timeout = this.options.timeout ?? 30000
-        const needsActivation = await this.prepareTranslator(page, options.sourceLocale, options.targetLocale, timeout)
+        const languagePair = normalizeChromeTranslatorLanguagePair(options.sourceLocale, options.targetLocale)
+        const needsActivation = await this.prepareTranslator(page, languagePair.sourceLanguage, languagePair.targetLanguage, timeout)
 
         if (needsActivation)
           await page.click('#activate')
 
-        await this.waitForTranslatorReady(page, options.sourceLocale, options.targetLocale, timeout)
-        translations = await this.translatePreparedTexts(page, texts, options.sourceLocale, options.targetLocale, timeout)
+        await this.waitForTranslatorReady(page, languagePair.sourceLanguage, languagePair.targetLanguage, timeout)
+        translations = await this.translatePreparedTexts(page, texts, languagePair.sourceLanguage, languagePair.targetLanguage, timeout)
       }
       catch (error) {
         throw wrapError(`Chrome translator failed for ${options.sourceLocale}->${options.targetLocale} (${texts.length} text(s))`, error)
@@ -326,6 +369,50 @@ export class ChromeTranslator implements Translator {
       targetLocale,
       timeout,
     })
+  }
+}
+
+export interface ChromeTranslatorLanguagePair {
+  sourceLanguage: string
+  targetLanguage: string
+}
+
+export function normalizeChromeTranslatorLanguagePair(sourceLocale: string, targetLocale: string): ChromeTranslatorLanguagePair {
+  return {
+    sourceLanguage: normalizeChromeTranslatorLanguageCode(sourceLocale),
+    targetLanguage: normalizeChromeTranslatorLanguageCode(targetLocale),
+  }
+}
+
+export function normalizeChromeTranslatorLanguageCode(locale: string): string {
+  const normalized = locale.trim().replace(/_/g, '-')
+  if (!normalized)
+    throw new Error('Chrome Translator language code cannot be empty.')
+
+  const lower = normalized.toLowerCase()
+  if (lower === 'iw' || lower === 'he' || lower.startsWith('he-'))
+    return 'iw'
+  if (lower === 'zh-hant' || lower === 'zh-tw' || lower === 'zh-hk' || lower === 'zh-mo')
+    return 'zh-Hant'
+  if (lower === 'zh-hans' || lower === 'zh-cn' || lower === 'zh-sg' || lower === 'zh-my')
+    return 'zh'
+
+  const direct = findChromeTranslatorLanguage(normalized)
+  if (direct)
+    return direct
+
+  const baseLanguage = lower.split('-')[0]
+  const base = baseLanguage ? findChromeTranslatorLanguage(baseLanguage) : undefined
+  if (base)
+    return base
+
+  throw new Error(`Chrome Translator API does not support language code "${locale}".`)
+}
+
+function findChromeTranslatorLanguage(locale: string): string | undefined {
+  for (const language of CHROME_TRANSLATOR_LANGUAGES) {
+    if (language.toLowerCase() === locale.toLowerCase())
+      return language
   }
 }
 

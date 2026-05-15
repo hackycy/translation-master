@@ -455,6 +455,33 @@ describe('i18n migrate workflow', () => {
     expect(await readFile(path.join(targetDir, 'common.json'), 'utf8')).toContain('EN:保存')
   })
 
+  it('uses tmigrate config when translating locale packages', async () => {
+    const cwd = await createTempProject()
+    const sourceDir = path.join(cwd, 'src', 'locales', 'zh')
+    await mkdir(sourceDir, { recursive: true })
+    await writeFile(path.join(sourceDir, 'common.json'), JSON.stringify({ save: '保存', cancel: '取消' }, null, 2), 'utf8')
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+
+    const configPath = path.join(cwd, '.tmigrate', 'config.json')
+    const config = JSON.parse(await readFile(configPath, 'utf8')) as { batchSize?: number }
+    config.batchSize = 1
+    await writeFile(configPath, JSON.stringify(config, null, 2), 'utf8')
+
+    const translator = new LocaleAwareTranslator()
+    await translateLocalePackage({
+      cwd,
+      path: 'src/locales/zh',
+      sourceLocale: 'zh',
+      targetLocale: 'en',
+      translator,
+    })
+
+    expect(translator.seen).toEqual([
+      { sourceLocale: 'zh', targetLocale: 'en' },
+      { sourceLocale: 'zh', targetLocale: 'en' },
+    ])
+  })
+
   it('adapts approved Vue and script source text to i18n key calls', async () => {
     const cwd = await createTempProject()
     const sourcePath = path.join(cwd, 'src', 'components', 'Table.vue')

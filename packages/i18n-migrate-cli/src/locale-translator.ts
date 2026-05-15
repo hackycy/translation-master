@@ -11,7 +11,7 @@ import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { glob } from 'tinyglobby'
-import { defineConfig } from './config'
+import { loadConfig } from './config'
 import { isNodeError } from './fs-utils'
 import { createDefaultParser } from './parsers/parser'
 import { toPosixPath } from './paths'
@@ -35,7 +35,7 @@ export async function translateLocalePackage(options: TranslateLocaleOptions): P
       : `Preparing locale package translation ${sourceDirLabel} -> ${outputDirLabel}`,
   })
 
-  const config = createRuntimeConfig(options)
+  const config = await createRuntimeConfig(cwd, options)
   const translator = options.translator ?? createTranslator(config, {
     onModelLoadProgress(event) {
       options.onProgress?.({
@@ -150,11 +150,11 @@ function assertSafeOutputDir(sourceDir: string, outputDir: string): void {
     throw new Error('Locale package output directory cannot be inside the source directory.')
 }
 
-function createRuntimeConfig(options: TranslateLocaleOptions): MigrateConfig {
-  return defineConfig(compactConfigInput({
+async function createRuntimeConfig(cwd: string, options: TranslateLocaleOptions): Promise<MigrateConfig> {
+  return loadConfig(cwd, compactConfigInput({
     sourceLocale: options.sourceLocale,
     targetLocale: options.targetLocale,
-    translator: options.translatorBackend ?? 'local',
+    translator: options.translatorBackend,
     translatorOptions: compactTranslatorOptions(options.translatorOptions),
     batchSize: options.batchSize,
   }))
@@ -163,7 +163,7 @@ function createRuntimeConfig(options: TranslateLocaleOptions): MigrateConfig {
 function compactConfigInput(input: {
   sourceLocale: string
   targetLocale: string
-  translator: MigrateConfig['translator']
+  translator?: MigrateConfig['translator']
   translatorOptions?: TranslateLocaleOptions['translatorOptions']
   batchSize?: number
 }): MigrateConfigInput {

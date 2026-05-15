@@ -62,7 +62,7 @@ pnpm exec tmigrate restore
 
 `convert` 不修改源码，只生成 locale 文件；`adapt` 不生成语言包，只修改源码。两者都只消费已批准且未跳过、未废弃的 map 条目。
 
-如果项目已经有规范化的 locale 语言包，也可以跳过 `.tmigrate` 配置和 map 流程，使用 `translate-locale` 直接把一个源语言目录翻译成目标语言目录。
+如果项目已经有规范化的 locale 语言包，也可以跳过 map 流程，使用 `translate-locale` 直接把一个源语言目录翻译成目标语言目录。该命令会复用 `.tmigrate/config.json` 中的翻译器配置。
 
 ### 翻译器后端
 
@@ -225,16 +225,13 @@ export default {
 
 ### `translate-locale`
 
-直接翻译一个已有语言包目录，不读取 `.tmigrate/config.json`，不生成 map，也不改源码。适合项目已经有 `src/locales/lang/zh`、`src/locales/lang/en` 这类目录结构时，按源目录 1:1 生成另一个语言目录。
+直接翻译一个已有语言包目录，不生成 map，也不改源码。适合项目已经有 `src/locales/lang/zh`、`src/locales/lang/en` 这类目录结构时，按源目录 1:1 生成另一个语言目录。
+
+`translate-locale` 只在命令行暴露 `--from` / `--to`。翻译器后端、API endpoint、Chrome 路径、批大小等运行配置会读取 `.tmigrate/config.json`；没有配置文件时使用默认配置。
 
 ```bash
 tmigrate translate-locale src/locales/lang/zh --to en
 tmigrate translate-locale src/locales/lang/zh --from zh --to en
-tmigrate translate-locale src/locales/lang/zh --from zh --to ja -o src/locales/lang/ja
-tmigrate translate-locale src/locales/lang/zh --to en --translator chrome
-tmigrate translate-locale src/locales/lang/zh --to en --translator api --endpoint https://translator.example.com/translate
-tmigrate translate-locale src/locales/lang/zh --to en --dry-run
-tmigrate translate-locale src/locales/lang/zh --to en --overwrite
 ```
 
 如果没有传 `--from` 或 `--to`，并且当前是交互式终端，CLI 会显示语言选择器补齐缺失项；在非交互环境中需要显式传入 `--from` 和 `--to`。
@@ -243,27 +240,16 @@ tmigrate translate-locale src/locales/lang/zh --to en --overwrite
 
 - 源目录名等于 `--from` 时，输出到同级的 `--to` 目录，例如 `src/locales/lang/zh` -> `src/locales/lang/en`。
 - 源目录名不是 `--from` 时，输出到同级的 `<源目录名>-<to>`，避免覆盖不明确的目录。
-- 也可以用 `-o, --output-dir` 明确指定输出目录。
 
-当前支持 `json`、`js`、`ts` 文件。命令会保持目录结构、文件名和原文件风格，递归翻译字符串 value；JSON key、JS/TS 对象 key、import/export source 等代码语义位置会跳过。输出文件已存在时默认跳过，使用 `--overwrite` 才会覆盖。
+当前支持 `json`、`js`、`ts` 文件。命令会保持目录结构、文件名和原文件风格，递归翻译字符串 value；JSON key、JS/TS 对象 key、import/export source 等代码语义位置会跳过。输出文件已存在时默认跳过。
 
 常用选项：
 
 | 选项 | 说明 |
 |---|---|
 | `<dir>` | 源语言包目录 |
-| `-o, --output-dir <dir>` | 输出目录，不传时按默认输出规则推导 |
 | `--from <locale>` | 源语言；缺省时交互选择 |
 | `--to <locale>` | 目标语言；缺省时交互选择 |
-| `--translator <backend>` | 翻译后端：`local`、`api`、`chrome`，默认 `local` |
-| `--model-base-url <url-or-path>` | 本地模型来源 |
-| `--endpoint <url>` | API 翻译服务地址 |
-| `--api-key <key>` | API key |
-| `--chrome-browser-executable-path <path>` | Chrome 后端使用的 Chrome 可执行文件 |
-| `--no-chrome-browser-visible` | Chrome 后端不显示浏览器窗口 |
-| `--batch-size <number>` | 翻译批大小 |
-| `--overwrite` | 覆盖已有输出文件 |
-| `--dry-run` | 只预览，不写文件 |
 
 ### `adapt`
 
