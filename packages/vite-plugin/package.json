@@ -1,7 +1,7 @@
 {
   "name": "@translation-master/vite-plugin",
   "type": "module",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "Vite plugin for translate.js",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
